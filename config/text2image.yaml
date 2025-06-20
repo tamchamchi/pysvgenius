@@ -1,0 +1,16 @@
+default: sdxl-turbo
+sdxl-turbo:
+  model_path: "stabilityai/sdxl-turbo"
+  guidance_scale: 0.0
+  num_inference_steps: 4
+  image_size: [512, 512]
+  device: "cuda"
+  lora_path: ~
+
+sdv2:
+  model_path: "stabilityai/stable-diffusion-2-1"
+  guidance_scale: 10
+  num_inference_steps: 35
+  image_size: [768, 768]
+  device: "cuda"
+  lora_path: ~

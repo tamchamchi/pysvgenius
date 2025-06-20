@@ -1,0 +1,48 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# === Environment ===
+.env
+.venv/
+env/
+venv/
+*.env
+
+# === Jupyter Notebooks Checkpoints ===
+.ipynb_checkpoints/
+
+# === VSCode ===
+.vscode/
+
+# === Logs and temp ===
+*.log
+*.tmp
+*.swp
+*.bak
+
+
+# === Test cache ===
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+coverage.xml
+
+# === IDE files ===
+.idea/
+*.iml
+*.code-workspace
+
+# === Data ===
+data/
+
+# === Model ===
+models/
