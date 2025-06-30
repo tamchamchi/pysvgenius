@@ -18,3 +18,4 @@ vtracer
 torch
 torchvision
 torchaudio
+more-itertools
