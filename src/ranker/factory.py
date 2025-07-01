@@ -1,4 +1,4 @@
-from base import ISVGRanker
+from .base import ISVGRanker
 from typing import Type
 
 

@@ -1,10 +1,10 @@
 import io
-from PIL import Image, ImageFilter
-import matplotlib.pyplot as plt
-import cv2
+
 import cairosvg
+import cv2
+import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 from skimage.metrics import structural_similarity as ssim
 
 
@@ -197,3 +197,37 @@ class ImageProcessor:
             .apply_bilateral_filter(d=5, sigma_color=75, sigma_space=75)
             .apply_jpeg_compression(quality=92)
         )
+
+
+def svg_to_png(svg_code: str, size: tuple = (384, 384)) -> Image.Image:
+    """
+    Converts an SVG string to a PNG image using CairoSVG.
+
+    If the SVG does not define a `viewBox`, it will add one using the provided size.
+
+    Parameters
+    ----------
+    svg_code : str
+         The SVG string to convert.
+    size : tuple[int, int], default=(384, 384)
+         The desired size of the output PNG image (width, height).
+
+    Returns
+    -------
+    PIL.Image.Image
+         The generated PNG image.
+    """
+    # Ensure SVG has proper size attributes
+    if "viewBox" not in svg_code:
+        svg_code = svg_code.replace(
+            "<svg", f'<svg viewBox="0 0 {size[0]} {size[1]}"')
+
+    # Convert SVG to PNG
+    png_data = cairosvg.svg2png(bytestring=svg_code.encode("utf-8"))
+    return Image.open(io.BytesIO(png_data)).convert("RGB").resize(size)
+
+
+def process_svg_to_image(svg_code: str) -> Image.Image:
+    image_processor = ImageProcessor(svg_to_png(svg_code), seed=42).apply()
+    image = image_processor.image.copy()
+    return image

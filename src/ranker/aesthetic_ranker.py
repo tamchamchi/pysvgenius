@@ -1,14 +1,12 @@
-from base import ISVGRanker
+from .base import ISVGRanker
 import os
 
 import clip
 import torch
 import torch.nn as nn
 from PIL import Image
-
-from config.config_dir import MODEL_DIR
-from src.utils.image_utils import ImageProcessor
-from src.utils.svg_utils import svg_to_png
+from src import MODEL_DIR
+from src.utils.image_utils import process_svg_to_image
 
 
 class AestheticPredictor(nn.Module):
@@ -110,9 +108,7 @@ class AestheticRanker(ISVGRanker):
         results = []
 
         for svg in svg_list:
-            image_processor = ImageProcessor(
-                image=svg_to_png(svg), seed=42).apply()
-            image = image_processor.image.copy()
+            image = process_svg_to_image(svg_code=svg)
             aesthetic_score = self.score(image)
             results.append({
                 "svg": svg,
@@ -124,9 +120,9 @@ class AestheticRanker(ISVGRanker):
 
 if __name__ == "__main__":
     import time
+    start = time.time()
     svg = ["""<svg width="256" height="256" viewBox="0 0 256 256"><circle cx="50" cy="50" r="40" fill="red" /></svg>"""]
     aesthetic_ranker = AestheticRanker()
-    start = time.time()
     print(aesthetic_ranker.process(svg))
     end = time.time()
     print(end - start)

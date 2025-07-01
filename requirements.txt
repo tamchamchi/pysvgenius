@@ -19,3 +19,5 @@ torch
 torchvision
 torchaudio
 more-itertools
+sentencepiece
+protobuf

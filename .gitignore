@@ -46,3 +46,6 @@ data/
 
 # === Model ===
 models/
+
+# === Test ===
+/_test.py

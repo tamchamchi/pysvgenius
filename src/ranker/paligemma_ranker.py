@@ -1,4 +1,4 @@
-from base import ISVGRanker
+from .base import ISVGRanker
 import string
 from more_itertools import chunked
 import statistics
@@ -10,8 +10,7 @@ from transformers import (
     BitsAndBytesConfig,
     PaliGemmaForConditionalGeneration,
 )
-from src.utils.image_utils import ImageProcessor
-from src.utils.svg_utils import svg_to_png
+from src.utils.image_utils import process_svg_to_image
 
 
 class PaliGemmaRanker(ISVGRanker):
@@ -221,9 +220,7 @@ class PaliGemmaRanker(ISVGRanker):
         answers = self.answers
 
         for svg in svg_list:
-            image_processor = ImageProcessor(
-                image=svg_to_png(svg), seed=42).apply()
-            image = image_processor.image.copy()
+            image = process_svg_to_image(svg_code=svg)
             score = self.score(
                 questions=question,
                 choices=choices,
@@ -237,3 +234,5 @@ class PaliGemmaRanker(ISVGRanker):
         return results
 
 
+if __name__ == "__main__":
+    ranker = PaliGemmaRanker()
