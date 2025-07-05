@@ -121,8 +121,9 @@ class AestheticRanker(ISVGRanker):
 if __name__ == "__main__":
     import time
     start = time.time()
-    svg = ["""<svg width="256" height="256" viewBox="0 0 256 256"><circle cx="50" cy="50" r="40" fill="red" /></svg>"""]
+    with open("../data/test/optimized_result.svg", "r") as f:
+        svg = f.read()
     aesthetic_ranker = AestheticRanker()
-    print(aesthetic_ranker.process(svg))
+    print(aesthetic_ranker.process([svg]))
     end = time.time()
     print(end - start)

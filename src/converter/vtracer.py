@@ -4,11 +4,10 @@ from io import BytesIO
 from itertools import product
 
 import vtracer
-from base import IImageToConverter
+from .base import IImageToConverter
 from PIL import Image
 
-from utils.image_utils import compute_ssim_images, resize_image
-from utils.svg_utils import svg_to_png
+from utils.image_utils import compute_ssim_images, resize_image, svg_to_png
 
 
 class VtracerConverter(IImageToConverter):
@@ -84,7 +83,7 @@ class VtracerConverter(IImageToConverter):
 
         img_rgba = image.convert("RGBA")
         resized_img = resize_image(image=img_rgba, size=(384, 384))
-        pixels = list(resize_image.getdata())
+        pixels = list(resized_img.getdata())
 
         for filter_speckle, layer_difference, color_precision in product(self.speckle_values, self.layer_diff_values, self.color_precision_values):
             svg_str = vtracer.convert_pixels_to_svg(
