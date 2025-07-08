@@ -121,7 +121,7 @@ class AestheticRanker(ISVGRanker):
 if __name__ == "__main__":
     import time
     start = time.time()
-    with open("../data/test/optimized_result.svg", "r") as f:
+    with open("/home/anhndt/pysvgenius/notebooks/results.svg", "r") as f:
         svg = f.read()
     aesthetic_ranker = AestheticRanker()
     print(aesthetic_ranker.process([svg]))
