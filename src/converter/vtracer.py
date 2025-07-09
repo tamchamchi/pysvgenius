@@ -1,3 +1,15 @@
+from transformers import get_constant_schedule_with_warmup, get_cosine_schedule_with_warmup
+import torch
+import pydiffvg
+import numpy as np
+from kmeans_gpu import KMeans
+import cv2
+from tqdm import tqdm
+import xml.etree.ElementTree as etree
+import tempfile
+import random
+import math
+from colorsys import rgb_to_hls
 import re
 import xml.etree.ElementTree as ET
 from io import BytesIO
@@ -23,7 +35,7 @@ class VtracerConverter(IImageToConverter):
         color_precision_values (list[int]): List of color precision values to sweep.
     """
 
-    def __init__(self, max_size: int = 10000):
+    def __init__(self):
         """
         Initialize the converter with optional maximum SVG size.
 
@@ -31,7 +43,6 @@ class VtracerConverter(IImageToConverter):
             max_size (int): Maximum allowed size for output SVG in bytes.
         """
         self.default_svg = """<svg width="256" height="256" viewBox="0 0 256 256"><circle cx="50" cy="50" r="40" fill="red" /></svg>"""
-        self.max_size = max_size
         self.speckle_values = [10, 20, 40]
         self.layer_diff_values = [64, 128]
         self.color_precision_values = [4, 5, 6]
@@ -65,7 +76,7 @@ class VtracerConverter(IImageToConverter):
 
         return result_svg
 
-    def _convert_image_to_svg(self, image: Image.Image) -> str:
+    def _convert_image_to_svg(self, image: Image.Image, max_size: int = 10000) -> str:
         """
         Convert a single image to an SVG string by running vtracer with
         multiple hyperparameter combinations and selecting the best result
@@ -107,7 +118,7 @@ class VtracerConverter(IImageToConverter):
 
             byte_len = len(svg_str.encode("utf-8"))
 
-            if byte_len <= self.max_size and byte_len > best_size:
+            if byte_len <= max_size and byte_len > best_size:
                 if best_ssim <= ssim_score:
                     best_ssim = ssim_score
                     best_svg = self._postprocess_svg(svg_str)
@@ -115,7 +126,7 @@ class VtracerConverter(IImageToConverter):
 
         return best_svg
 
-    def process(self, images: list[Image.Image]) -> list[str]:
+    def process(self, images: list[Image.Image], max_size: int = 10000) -> list[str]:
         """
         Convert a list of PIL images to their corresponding optimized SVG strings.
 
@@ -127,7 +138,18 @@ class VtracerConverter(IImageToConverter):
         """
         result = []
         for image in images:
-            output = self._convert_image_to_svg(image)
+            output = self._convert_image_to_svg(image, max_size)
             result.append(output)
 
         return result
+
+
+if __name__ == "__main__":
+    convertor = VtracerConverter()
+    image = Image.open(
+        "/home/anhndt/pysvgenius/data/test/raw_image.png")
+    resized_image = resize_image(image)
+    svg = convertor.process([resized_image], max_size=11000)
+    with open("test_svg.svg", 'w') as f:
+        f.write(svg[0])
+    print(len(svg[0].encode('utf-8')))

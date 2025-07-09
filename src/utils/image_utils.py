@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageFilter
 from skimage.metrics import structural_similarity as ssim
+import torch
+from torchvision import transforms
 
 
 def compute_ssim_images(img1: Image.Image, img2: Image.Image, size=(384, 384)):
@@ -23,7 +25,7 @@ def compute_ssim_images(img1: Image.Image, img2: Image.Image, size=(384, 384)):
     # Resize and convert to grayscale
     img1_gray = img1.resize(size, Image.Resampling.LANCZOS).convert("L")
     img2_gray = img2.resize(size, Image.Resampling.LANCZOS).convert("L")
-           
+
     # Convert to numpy arrays
     arr1 = np.array(img1_gray)
     arr2 = np.array(img2_gray)
@@ -219,7 +221,8 @@ def svg_to_png(svg_code: str, size: tuple = (384, 384)) -> Image.Image:
     """
     # Ensure SVG has proper size attributes
     if "viewBox" not in svg_code:
-        svg_code = svg_code.replace("<svg", f'<svg viewBox="0 0 {size[0]} {size[1]}"')
+        svg_code = svg_code.replace(
+            "<svg", f'<svg viewBox="0 0 {size[0]} {size[1]}"')
 
     # Convert SVG to PNG
     png_data = cairosvg.svg2png(bytestring=svg_code.encode("utf-8"))
@@ -230,3 +233,13 @@ def process_svg_to_image(svg_code: str) -> Image.Image:
     image_processor = ImageProcessor(svg_to_png(svg_code), seed=42).apply()
     image = image_processor.image.copy()
     return image
+
+
+def image_to_tensor(image: Image) -> torch.Tensor:
+    to_tensor = transforms.ToTensor()
+
+    if isinstance(image, list):
+        tensor = torch.stack([to_tensor(img) for img in image])
+    else:
+        tensor = to_tensor(image)
+    return tensor

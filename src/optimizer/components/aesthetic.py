@@ -27,7 +27,7 @@ class AestheticPredictor(nn.Module):
 
 class AestheticEvaluatorTorch:
     def __init__(self):
-        self.model_path = "../models/sac+logos+ava1-l14-linearMSE.pth"
+        self.model_path = r"/home/anhndt/pysvgenius/models/sac+logos+ava1-l14-linearMSE.pth"
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu")
         self.predictor, self.clip_model, self.preprocessor = self.load()
