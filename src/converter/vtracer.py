@@ -1,8 +1,9 @@
 from functools import partial
 from concurrent.futures import ProcessPoolExecutor
-from tqdm import tqdm
 import tempfile
 import re
+import logging
+from typing import Optional
 
 import vtracer
 from .base import IImageToConverter
@@ -10,15 +11,35 @@ from PIL import Image
 import os
 
 from utils.image_utils import svg_to_png
+from utils.logger import get_library_logger, create_console_logger
 
 
 class VtracerConverter(IImageToConverter):
-    def __init__(self):
-        self.limit = 10000
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        """
+        Initialize VtracerConverter.
+
+        Parameters
+        ----------
+        logger : Optional[logging.Logger]
+            Logger instance to use. If None, a default logger will be created.
+        """
+        if logger is not None:
+            self.logger = logger
+        else:
+            # Sử dụng library logger (silent by default)
+            self.logger = get_library_logger(
+                f"{__name__}.{self.__class__.__name__}")
+
+        self.logger.debug("VtracerConverter initialized")
+
+    def __call__(self, images, **kwargs):
+        return self.process(images, **kwargs)
 
     def _convert_svg_with_vtracer(
         self, img: Image.Image, image_size: tuple[int, int] = (256, 256)
     ) -> str:
+        self.logger.debug(f"Converting image to SVG with size: {image_size}")
         tmp_dir = tempfile.TemporaryDirectory()
 
         resized_image = img.resize(image_size)
@@ -28,11 +49,13 @@ class VtracerConverter(IImageToConverter):
 
         svg_path = os.path.join(tmp_dir.name, "converted_svg.svg")
 
+        self.logger.debug(
+            f"Using vtracer to convert {tmp_file_path} to {svg_path}")
         vtracer.convert_image_to_svg_py(
             image_path=tmp_file_path,
             out_path=svg_path,
             colormode="color",
-            hierarchical="cutout", 
+            hierarchical="cutout",
             # hierarchical="stacked",
             mode="polygon",
         )
@@ -205,193 +228,6 @@ class VtracerConverter(IImageToConverter):
         footer = "</svg>"
         return header + ''.join(path_list[1:]) + footer
 
-    def _svg_conversion_division(self, img: Image.Image, image_size=(384, 384), num_divisions=5):
-        """
-        1. Resize the image based on image_size and divide it into num_divisions x num_divisions tiles.
-        2. For each tile, crop the original image accordingly and convert it into SVG.
-        3. Finally, merge all the tile SVG paths, adjusting coordinates directly instead of using transforms.
-        """
-        # Resize the input image to the specified image_size
-        img_resized = img.resize(image_size, Image.LANCZOS)
-        W, H = img_resized.size
-
-        # Calculate the base size for each tile
-        base_tile_w = W // num_divisions
-        base_tile_h = H // num_divisions
-
-        if base_tile_w == 0 or base_tile_h == 0:
-            # If the resulting tile size becomes 0, issue a warning and continue with minimal size
-            print(
-                f"Warning: Calculated base tile size is very small ({base_tile_w}x{base_tile_h}). "
-                "Resulting SVG might be distorted or empty."
-            )
-            # Set minimum size to 1 to continue processing
-            base_tile_w = max(1, base_tile_w)
-            base_tile_h = max(1, base_tile_h)
-
-        all_shifted_path_tags = []
-        overall_bg_color = None  # Background color of the entire SVG
-
-        for r_idx in range(num_divisions):
-            for c_idx in range(num_divisions):
-                offset_x = c_idx * base_tile_w
-                offset_y = r_idx * base_tile_h
-
-                # Calculate the actual width and height for the current tile (last tiles may include remainders)
-                current_tile_w = base_tile_w if c_idx < num_divisions - 1 else W - offset_x
-                current_tile_h = base_tile_h if r_idx < num_divisions - 1 else H - offset_y
-
-                if current_tile_w <= 0 or current_tile_h <= 0:
-                    continue  # Skip tiles with zero or negative size
-
-                # Crop the tile from the resized image
-                box = (offset_x, offset_y, offset_x +
-                       current_tile_w, offset_y + current_tile_h)
-                tile_img = img_resized.crop(box)
-
-                if tile_img.width == 0 or tile_img.height == 0:
-                    continue
-
-                # Same logic as svg_conversion: convert tile to SVG using vtracer
-                try:
-                    with tempfile.TemporaryDirectory() as tmp_dir_name:
-                        tmp_file_path = os.path.join(
-                            tmp_dir_name, f"tmp_tile_{r_idx}_{c_idx}.png")
-                        # Save in RGB mode
-                        tile_img.convert("RGB").save(tmp_file_path)
-
-                        svg_tile_output_path = os.path.join(
-                            tmp_dir_name, f"tile_gen_svg_{r_idx}_{c_idx}.svg")
-                        vtracer.convert_image_to_svg_py(
-                            tmp_file_path,
-                            svg_tile_output_path,
-                            colormode="color",
-                            hierarchical="cutout",  # Use cutout mode
-                            mode="polygon",
-                            # Add other vtracer parameters here if needed
-                        )
-                        with open(svg_tile_output_path, encoding="utf-8") as f:
-                            tile_svg_str = f.read()
-                except Exception as e:
-                    print(f"Error processing tile ({r_idx},{c_idx}): {e}")
-                    continue
-
-                # Extract <path> elements from the tile SVG
-                raw_path_tags_from_tile = self._extract_paths(tile_svg_str)
-
-                if not raw_path_tags_from_tile:
-                    continue
-
-                # Try to get the background color from the first path of the first tile
-                if r_idx == 0 and c_idx == 0 and not overall_bg_color:
-                    first_path_of_first_tile = raw_path_tags_from_tile[0]
-                    match_bg = re.search(
-                        r'fill="([^"]+)"', first_path_of_first_tile)
-                    if match_bg:
-                        overall_bg_color = match_bg.group(1)
-
-                # Offset the coordinates of each path
-                for path_idx, path_tag_original in enumerate(raw_path_tags_from_tile):
-                    d_match = re.search(r'd="([^"]+)"', path_tag_original)
-                    if not d_match:
-                        continue
-                    d_original = d_match.group(1)
-
-                    shifted_sub_paths_strings = []
-                    # Split into subpaths using "M...Z" pattern
-                    sub_paths_data = re.findall(
-                        r"M[^M]*?Z", d_original, flags=re.IGNORECASE)
-                    if not sub_paths_data and d_original.strip():  # If no subpaths, treat as one whole path
-                        sub_paths_data = [d_original]
-
-                    valid_path_data_found = False
-                    for sub_d_segment in sub_paths_data:
-                        # Tokens are commands (letters) or numbers
-                        tokens = re.findall(
-                            r"[MLZHVCSQTA]|-?[\d\.]+", sub_d_segment, flags=re.IGNORECASE)
-                        shifted_tokens_for_sub = []
-                        k = 0
-                        while k < len(tokens):
-                            cmd = tokens[k]
-                            shifted_tokens_for_sub.append(cmd)
-                            k += 1
-
-                            # Handle coordinates based on the number of arguments for each command
-                            # vtracer polygon mode is expected to use mainly M and L (absolute coordinates)
-                            # Assume coordinates are integers based on vtracer polygon output
-                            coords_to_process = 0
-                            if cmd.upper() in ("M", "L", "T"):
-                                coords_to_process = 1  # One x,y pair
-                            elif cmd.upper() in ("Q", "S"):
-                                coords_to_process = 2  # Two x,y pairs
-                            elif cmd.upper() == "C":
-                                coords_to_process = 3  # Three x,y pairs
-                            # A (Arc) is complex and assumed to be unused in polygon mode
-                            # H, V are single coordinates
-
-                            if cmd.upper() == "H":  # Horizontal line
-                                if k < len(tokens):
-                                    try:
-                                        x = int(float(tokens[k]))
-                                        shifted_tokens_for_sub.append(
-                                            str(x + offset_x))
-                                        k += 1
-                                    except (ValueError, IndexError):
-                                        break  # Parse error
-                            elif cmd.upper() == "V":  # Vertical line
-                                if k < len(tokens):
-                                    try:
-                                        y = int(float(tokens[k]))
-                                        shifted_tokens_for_sub.append(
-                                            str(y + offset_y))
-                                        k += 1
-                                    except (ValueError, IndexError):
-                                        break  # Parse error
-                            else:  # Commands with x,y pairs
-                                for _ in range(coords_to_process):
-                                    if k + 1 < len(tokens):
-                                        try:
-                                            x = int(float(tokens[k]))
-                                            y = int(float(tokens[k + 1]))
-                                            shifted_tokens_for_sub.append(
-                                                str(x + offset_x))
-                                            shifted_tokens_for_sub.append(
-                                                str(y + offset_y))
-                                            k += 2
-                                        except (ValueError, IndexError):
-                                            # Exit loop on error
-                                            k = len(tokens)
-                                            break
-                                    else:  # Not enough tokens
-                                        k = len(tokens)
-                                        break
-                                # Ended prematurely
-                                if k == len(tokens) and _ < coords_to_process - 1:
-                                    # Only keep the command
-                                    shifted_tokens_for_sub = [
-                                        shifted_tokens_for_sub[0]]
-
-                        if len(shifted_tokens_for_sub) > 1:  # Command + at least one argument
-                            shifted_sub_paths_strings.append(
-                                " ".join(shifted_tokens_for_sub))
-                            valid_path_data_found = True
-
-                    if valid_path_data_found:
-                        shifted_d_final = "".join(shifted_sub_paths_strings)
-                        # Replace only the d attribute in the original path tag
-                        new_path_tag = re.sub(
-                            r'd="[^"]*"', f'd="{shifted_d_final}"', path_tag_original, count=1)
-                        all_shifted_path_tags.append(new_path_tag)
-
-        # Construct overall SVG header using resized width and height
-        svg_final_header = f'<svg width="{W}" height="{H}" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg">'
-
-        # Concatenate all adjusted paths
-        final_svg_str = svg_final_header + \
-            "".join(all_shifted_path_tags) + "</svg>"
-
-        return final_svg_str
-
     def vtracer_png_to_svg(self, image, size_range=(50, 500), limit=10000):
         """
         Convert the given image to an SVG and compress it,
@@ -419,8 +255,9 @@ class VtracerConverter(IImageToConverter):
         ValueError
             If no image size within `size_range` can satisfy the length limit.
         """
+        self.logger.info(
+            f"Converting image to SVG with size range: {size_range}, limit: {limit}")
         lo, hi = size_range
-        best_size = None
         best_svg = None
 
         # Binary search to find the largest size that keeps SVG under limit
@@ -432,50 +269,53 @@ class VtracerConverter(IImageToConverter):
             svg = self._svg_compress(svg)
             length = len(svg)
 
+            self.logger.debug(
+                f"Binary search: size={mid}, svg_length={length}, limit={limit}")
+
             if length <= limit:
                 # This size is valid → Try larger sizes
-                best_size = mid
                 best_svg = svg
                 lo = mid + 1
+                self.logger.debug(f"Size {mid} is valid, trying larger sizes")
             else:
                 # SVG too large → Try smaller sizes
                 hi = mid - 1
-
-        # If size is small, try subdividing the image and recompress
-        if best_size < 256:
-            return best_svg
-        else:
-            for i in range(2, 14):
-                svg = self._svg_conversion_division(image, (256, 256), i)
-                svg = self._svg_compress(svg)
-                length = len(svg)
-                if length < limit:
-                    best_svg = svg
-                else:
-                    break
+                self.logger.debug(
+                    f"Size {mid} too large, trying smaller sizes")
 
         return best_svg
 
     def convert_all(self, images: list[Image.Image], max_workers=4, limit=10000) -> list[str]:
+        self.logger.info(
+            f"Converting {len(images)} images with {max_workers} workers, limit={limit}")
         svgs = []
         convert_func = partial(self.vtracer_png_to_svg, limit=limit)
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for svg in tqdm(executor.map(convert_func, images), total=len(images), desc="Converting SVGs..."):
+            for i, svg in enumerate(executor.map(convert_func, images), 1):
                 svgs.append(svg)
+                # Log progress every 10 images or at the end
+                if i % 10 == 0 or i == len(images):
+                    self.logger.info(f"Converted {i}/{len(images)} images")
+        self.logger.info(f"Successfully converted {len(svgs)} images to SVG")
         return svgs
 
     def process(self, images: list[Image.Image], limit=10000) -> list[str]:
+        self.logger.info(f"Processing {len(images)} images with limit={limit}")
         svgs = self.convert_all(images=images, max_workers=4, limit=limit)
         return svgs
 
 
 if __name__ == "__main__":
     convertor = VtracerConverter()
+
+    console_logger = create_console_logger("VtracerExample", logging.INFO)
+    convertor_with_logger = VtracerConverter(logger=console_logger)
+
     image = Image.open(
-        "/home/anhndt/pysvgenius/data/test/raw_image.png")
-    svg = convertor.process([image], limit=10000)
+        "/home/anhndt/pysvgenius/image.png")
+    # svg = convertor.process([image], limit=20000)
+    svg = convertor_with_logger([image]*20, limit=20000)
     converted_image = svg_to_png(svg[0])
     converted_image.save("image.png")
     with open("test_svg.svg", 'w') as f:
         f.write(svg[0])
-    print(len(svg[0].encode('utf-8')))
