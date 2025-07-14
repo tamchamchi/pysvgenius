@@ -1,7 +1,7 @@
-from typing import List, Optional
+from typing import List
 
 import torch
-from base import ITextToImageGenerator
+from .base import ITextToImageGenerator
 from diffusers import AutoPipelineForText2Image
 from PIL import Image
 
@@ -16,8 +16,6 @@ class SDXLTurboGenerator(ITextToImageGenerator):
 
     Attributes:
         model_path (str): Path or model ID for the pretrained SDXL-Turbo model.
-        guidance_scale (float): Classifier-free guidance scale (usually 0.0 for SDXL-Turbo).
-        num_inference_steps (int): Number of inference steps for image generation.
         device (str): Device to run the model on, typically "cuda" or "cpu".
         seed (int): Random seed for reproducible outputs.
         lora_path (Optional[str]): Path to a LoRA model if using LoRA fine-tuning.
@@ -26,29 +24,23 @@ class SDXLTurboGenerator(ITextToImageGenerator):
     def __init__(
         self,
         model_path: str = "stabilityai/sdxl-turbo",
-        guidance_scale: float = 0.0,
-        num_inference_steps: int = 4,
         device: str = "cuda",
         seed: int = 42,
-        lora_path: Optional[str] = None,
     ):
         """
-        Initialize the SDXLTurboGenerator with configuration parameters.
+        Initialize the SDXLTurboGenerator with model path, device, seed, and LoRA path.
 
         Args:
             model_path (str): Hugging Face model ID or local path.
-            guidance_scale (float): Guidance scale to steer image generation.
-            num_inference_steps (int): Number of diffusion steps.
             device (str): Target device (e.g., "cuda", "cpu").
             seed (int): Random seed for reproducibility.
             lora_path (Optional[str]): Optional path to a LoRA adapter.
         """
         self.model_path = model_path
-        self.guidance_scale = guidance_scale
-        self.num_inference_steps = num_inference_steps
         self.device = device
         self.seed = seed
-        self.lora_path = lora_path
+
+        # Load diffusion pipeline into memory
         self.pipe = self._load_pipeline()
 
     def _load_pipeline(self):
@@ -62,12 +54,44 @@ class SDXLTurboGenerator(ITextToImageGenerator):
             ValueError: If loading the pipeline fails.
         """
         try:
+            # Load model using FP16 precision for faster inference
             pipe = AutoPipelineForText2Image.from_pretrained(
                 self.model_path, torch_dtype=torch.float16, variant="fp16"
             ).to(self.device)
             return pipe
         except Exception as e:
             raise ValueError(f"Failed to load pipeline: {e}") from e
+
+    def set_params(self, **kwargs):
+        """
+        Update generator attributes such as seed, device, model_path, etc.
+
+        Args:
+            kwargs: Dictionary of parameter names and values.
+
+        Raises:
+            AttributeError: If a given parameter is not valid.
+        """
+        for key, val in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, val)
+            else:
+                raise AttributeError(
+                    f"Parameter '{key}' is not valid for {self.__class__.__name__}"
+                )
+
+    def get_params(self) -> dict:
+        """
+        Get current configuration parameters of the generator.
+
+        Returns:
+            dict: Dictionary containing model_path, device, seed, and lora_path.
+        """
+        return {
+            "model_path": self.model_path,
+            "device": self.device,
+            "seed": self.seed,
+        }
 
     def process(
         self,
@@ -100,10 +124,12 @@ class SDXLTurboGenerator(ITextToImageGenerator):
             RuntimeError: If generation fails.
         """
         try:
+            # Create a deterministic torch.Generator with fixed seed
             generator = torch.Generator(self.device)
             if self.seed is not None:
                 generator.manual_seed(self.seed)
 
+            # Run the text-to-image pipeline
             outputs = self.pipe(
                 prompt=prompt,
                 num_images_per_prompt=num_images,
@@ -112,14 +138,20 @@ class SDXLTurboGenerator(ITextToImageGenerator):
                 width=width,
                 num_inference_steps=num_inference_steps,
                 guidance_scale=guidance_scale,
-                generator=generator
+                generator=generator,
+                **kwargs  # Forward any extra args
             )
+
+            # Return list of generated PIL.Image objects
             return outputs.images
+
         except Exception as e:
             raise RuntimeError(f"Error in process(): {e}") from e
 
 
 if __name__ == "__main__":
+    # Example usage
     generator = SDXLTurboGenerator()
-    images = generator.process("a big dog")
-    print(len(images))
+    images = generator.process("a big dog running in the field")
+    images = generator("a pick dog", num_images=3)
+    print(f"Generated {len(images)} image(s)")
