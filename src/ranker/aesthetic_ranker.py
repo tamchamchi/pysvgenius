@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 from PIL import Image
 from src import MODEL_DIR
-from src.utils.image_utils import process_svg_to_image
 from src.utils.logger import get_library_logger
 
 
@@ -101,111 +100,164 @@ class AestheticRanker(ISVGRanker):
             self.logger.error(f"Failed to load models: {str(e)}")
             raise RuntimeError(f"Failed to load models: {str(e)}") from e
 
-    def score(self, image: Image.Image) -> float:
+    def score(self, images) -> list[float]:
         """
-        Computes an aesthetic score for a given image.
+        Computes aesthetic scores for given images (supports both single image and batch).
 
         Args:
-            image (Image.Image): A PIL image.
+            images: Can be either:
+                - Single PIL Image
+                - List of PIL Images
+                - Batch tensor
 
         Returns:
-            float: Aesthetic score in [0, 1].
+            list[float]: List of aesthetic scores in [0, 1].
         """
+        # Handle single image case
+        if isinstance(images, Image.Image):
+            images = [images]
+
+        if not images:
+            return []
+
         self.logger.debug(
-            f"Computing aesthetic score for image size: {image.size}")
+            f"Computing aesthetic scores for batch of {len(images)} images")
 
-        image = self.preprocessor(image).unsqueeze(0).to(self.device)
+        # Preprocess all images into a batch
+        batch_tensors = []
+        for img in images:
+            preprocessed = self.preprocessor(img).unsqueeze(0)
+            batch_tensors.append(preprocessed)
 
+        # Concatenate into a single batch tensor
+        batch = torch.cat(batch_tensors, dim=0).to(self.device)
+
+        scores = []
         with torch.no_grad():
-            image_features = self.clip_model.encode_image(image)
-            image_features /= image_features.norm(dim=-1, keepdim=True)
-            image_features = image_features.cpu().detach().numpy()
+            # Process the entire batch through CLIP
+            batch_features = self.clip_model.encode_image(batch)
+            batch_features /= batch_features.norm(dim=-1, keepdim=True)
 
-            score = self.predictor(
-                torch.from_numpy(image_features).to(self.device).float()
-            )
+            # Process through aesthetic predictor
+            batch_scores = self.predictor(batch_features.float())
 
-        normalized_score = score.item() / 10.0  # Normalize to [0, 1]
-        self.logger.debug(f"Computed aesthetic score: {normalized_score:.4f}")
+            # Normalize scores to [0, 1] and convert to list
+            normalized_scores = (batch_scores / 10.0).squeeze().cpu().numpy()
 
-        return normalized_score
+            # Handle single item case (numpy scalar)
+            if normalized_scores.ndim == 0:
+                scores = [float(normalized_scores)]
+            else:
+                scores = normalized_scores.tolist()
 
-    def process(self, svg_list: list[str] = [], prompt: str = None) -> list[int]:
+        self.logger.debug(
+            f"Computed {len(scores)} aesthetic scores: {[f'{s:.4f}' for s in scores]}")
+        return scores
+
+    def process(self, images: list[Image.Image], prompt: str = None, batch_size: int = 16) -> list[int]:
         """
-        Ranks a list of SVGs based on predicted aesthetic score.
+        Ranks a list of images based on predicted aesthetic score using configurable batch processing.
 
         Args:
+            images (list[Image.Image]): List of PIL Images to rank.
             prompt (str): Unused in this ranker but included for interface consistency.
-            svg_list (list[str]): List of SVG strings.
+            batch_size (int): Number of images to process in each batch. Default is 16.
+                             Larger batch_size = faster processing but more GPU memory usage.
+                             Smaller batch_size = slower processing but less GPU memory usage.
 
         Returns:
             list[int]: Indices sorted by score in descending order
         """
         _ = prompt
 
+        if not images:
+            self.logger.warning("No images provided for ranking")
+            return []
+
         self.logger.info(
-            f"Processing {len(svg_list)} SVG images for aesthetic ranking")
+            f"Processing {len(images)} images with batch_size={batch_size}")
 
-        results = []
+        all_scores = []
 
-        for i, svg in enumerate(svg_list, 1):
-            self.logger.debug(f"Processing SVG {i}/{len(svg_list)}")
+        # Process images in batches
+        for batch_start in range(0, len(images), batch_size):
+            batch_end = min(batch_start + batch_size, len(images))
+            current_batch = images[batch_start:batch_end]
+
+            self.logger.debug(f"Processing batch {batch_start//batch_size + 1}/{(len(images) + batch_size - 1)//batch_size} "
+                              f"(images {batch_start+1}-{batch_end})")
+
             try:
-                image = process_svg_to_image(svg_code=svg)
-                aesthetic_score = self.score(image)
-                results.append(aesthetic_score)
+                # Process current batch
+                batch_scores = self.score(current_batch)
+                all_scores.extend(batch_scores)
 
-                # Log progress every 5 SVGs
-                if i % 5 == 0 or i == len(svg_list):
-                    self.logger.info(f"Processed {i}/{len(svg_list)} SVGs")
+                # Log progress for larger datasets
+                if len(images) > batch_size:
+                    self.logger.info(
+                        f"Processed {batch_end}/{len(images)} images")
 
             except Exception as e:
-                self.logger.error(f"Failed to process SVG {i}: {str(e)}")
-                # Add with score 0 to maintain consistency
-                results.append({"svg": svg, "score": 0.0})
+                self.logger.error(
+                    f"Failed to process batch {batch_start//batch_size + 1}: {str(e)}")
+                # Add zeros for failed batch to maintain index consistency
+                all_scores.extend([0.0] * len(current_batch))
 
-        self.logger.info(
-            f"Completed aesthetic ranking for {len(results)} SVGs")
-        avg_score = sum(score for score in results) / \
-            len(results) if results else 0
-        self.logger.info(f"Average aesthetic score: {avg_score:.4f}")
+        if len(all_scores) != len(images):
+            self.logger.error(
+                f"Score count mismatch: {len(all_scores)} scores for {len(images)} images")
+            return []
 
         # Sort indices by score in descending order
-        sorted_indices = sorted(results, reverse=True)
-        self.logger.debug(f"Sorted indices (desc): {sorted_indices}")
+        indexed_scores = list(enumerate(all_scores))
+        sorted_pairs = sorted(indexed_scores, key=lambda x: x[1], reverse=True)
+        sorted_indices = [index for index, score in sorted_pairs]
+
+        self.logger.debug(
+            f"Sorted indices (desc): {sorted_indices[:10]}{'...' if len(sorted_indices) > 10 else ''}")
 
         # Log top scores
-        if results:
-            top_scores = [
-                score for score in sorted_indices[: min(3, len(results))]]
-            self.logger.info(f"Top scores: {top_scores}")
+        if all_scores:
+            top_count = min(5, len(all_scores))
+            top_scores = [all_scores[idx]
+                          for idx in sorted_indices[:top_count]]
+            self.logger.info(
+                f"Top {top_count} scores: {[f'{s:.4f}' for s in top_scores]}")
 
         # Log SUCCESS message when completed
-        success_msg = f"Aesthetic ranking complete - Processed {len(results)} SVGs, avg score: {avg_score:.4f}"
+        success_msg = f"Aesthetic ranking complete - Processed {len(images)} images in batches of {batch_size}"
         self.logger.success(success_msg)
 
-        # Return only sorted indices array
         return sorted_indices
 
 
 if __name__ == "__main__":
-    import time
     from src.utils.logger import create_console_logger
+    import logging
+    logger = create_console_logger("AestheticRanker", logging.INFO, use_colors=True)
 
-    # Create console logger to see output
-    logger = create_console_logger("AestheticRanker", logging.DEBUG)
+    import time
+
+    print("=== AestheticRanker Batch Processing Test ===")
 
     start = time.time()
-    with open("/home/anhndt/pysvgenius/data/test/svg_1.svg", "r") as f:
-        svg = f.read()
-    with open("/home/anhndt/pysvgenius/data/test/test_svg.svg", "r") as f:
-        raw_svg = f.read()
 
     aesthetic_ranker = AestheticRanker(logger=logger)
-    sorted_indices = aesthetic_ranker.process([svg, raw_svg])
 
-    print("Sorted indices (descending):", sorted_indices)
-    print("Best SVG index:", sorted_indices[0] if sorted_indices else None)
+    # Load test images
+    img1 = Image.open(
+        "/home/anhndt/pysvgenius/data/test/image.png").convert("RGB")
+    img2 = Image.open(
+        "/home/anhndt/pysvgenius/data/test/image01.png").convert("RGB")
+
+    images = [img1, img2] * 20
+
+    # Test 1: Default batch size
+    print("\n--- Test 1: Default batch size (16) ---")
+    start_test = time.time()
+    scores = aesthetic_ranker.score(images)
+    print(f"Individual scores: {[f'{s:.4f}' for s in scores]}")
+    print(f"Score computation time: {time.time() - start_test:.2f}s")
 
     end = time.time()
-    print(f"Total processing time: {end - start:.2f} seconds")
+    print(f"\nTotal test time: {end - start:.2f} seconds")
