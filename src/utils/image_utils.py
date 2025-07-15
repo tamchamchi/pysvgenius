@@ -229,10 +229,58 @@ def svg_to_png(svg_code: str, size: tuple = (384, 384)) -> Image.Image:
     return Image.open(io.BytesIO(png_data)).convert("RGB").resize(size)
 
 
-def process_svg_to_image(svg_code: str) -> Image.Image:
-    image_processor = ImageProcessor(svg_to_png(svg_code), seed=42).apply()
-    image = image_processor.image.copy()
-    return image
+def prepare_image_for_ranking(svgs: list[str]) -> tuple[list[Image.Image], list[int]]:
+    """
+    Convert a list of SVG strings to preprocessed PIL Images ready for ranking.
+
+    This function applies a series of image processing defenses to make the images
+    more robust for ranking algorithms.
+
+    Parameters
+    ----------
+    svgs : list[str]
+        List of SVG strings to convert and preprocess.
+
+    Returns
+    -------
+    list[Image.Image]
+        List of preprocessed PIL Images ready for ranking.
+
+    Raises
+    ------
+    ValueError
+        If the input list is empty.
+    Exception
+        If SVG conversion or image processing fails.
+    """
+    if not svgs:
+        raise ValueError("Input SVG list cannot be empty")
+
+    images = []
+    indexs = []
+
+    for i, svg in enumerate(svgs):
+        try:
+            # Convert SVG to PNG image
+            png_image = svg_to_png(svg)
+
+            # Apply image processing pipeline for robustness
+            image_processor = ImageProcessor(png_image, seed=0).apply()
+            processed_image = image_processor.image.copy()
+
+            indexs.append(i)
+            images.append(processed_image)
+
+        except Exception as e:
+            # Log error but continue processing other SVGs
+            print(f"Warning: Failed to process SVG {i+1}: {str(e)}")
+            # Skip this SVG and continue with the rest
+            continue
+
+    if not images:
+        raise Exception("Failed to process any SVG images")
+
+    return images, indexs
 
 
 def image_to_tensor(image: Image) -> torch.Tensor:

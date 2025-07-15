@@ -7,8 +7,8 @@ import clip
 import torch
 import torch.nn as nn
 from PIL import Image
-from src import MODEL_DIR
 from src.utils.logger import get_library_logger
+from src.utils.image_utils import prepare_image_for_ranking
 
 
 class AestheticPredictor(nn.Module):
@@ -41,7 +41,7 @@ class AestheticRanker(ISVGRanker):
     their visual quality using CLIP embeddings and a trained aesthetic predictor.
     """
 
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(self, model_path: str = None, device: str = "cuda:0", logger: Optional[logging.Logger] = None):
         """
         Initialize AestheticRanker.
 
@@ -58,18 +58,39 @@ class AestheticRanker(ISVGRanker):
 
         self.logger.info("Initializing AestheticRanker")
 
-        self.model_path = os.path.join(
-            MODEL_DIR, "sac+logos+ava1-l14-linearMSE.pth")
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu")
-
+        self.model_path = model_path
+        self.device = device
         self.logger.info(f"Using device: {self.device}")
         self.logger.debug(f"Model path: {self.model_path}")
 
-        self.predictor, self.clip_model, self.preprocessor = self.load()
+        self.predictor, self.clip_model, self.preprocessor = self._load()
         self.logger.success("AestheticRanker initialization complete")
 
-    def load(self):
+    def __call__(self, svgs: list[str], prompt: str = None, batch_size: int = 16, top_k: int = 2) -> list[int]:
+        """
+        Make AestheticRanker callable like a function.
+        This is a convenience method that delegates to the process() method.
+
+        Args:
+            svgs (list[str]): List of SVG to rank.
+            prompt (str): Unused in this ranker but included for interface consistency.
+            batch_size (int): Number of images to process in each batch. Default is 16.
+            top_k (int): Number of top ranked indices to return. Default is 2.
+
+        Returns:
+            list[int]: Top k indices sorted by score in descending order
+
+        Example:
+            >>> ranker = AestheticRanker()
+            >>> images = [svg1, svg2, svg3]
+            >>> top_indices = ranker(svgs, batch_size=8, top_k=2)  # Returns top 2 indices
+        """
+        self.logger.debug(f"__call__ invoked with {len(svgs) if svgs else 0} images, "
+                          f"batch_size={batch_size}, top_k={top_k}")
+
+        return self.process(svgs=svgs, prompt=prompt, batch_size=batch_size, top_k=top_k)
+
+    def _load(self):
         """
         Loads the aesthetic predictor and the CLIP model (ViT-L/14).
 
@@ -154,7 +175,7 @@ class AestheticRanker(ISVGRanker):
             f"Computed {len(scores)} aesthetic scores: {[f'{s:.4f}' for s in scores]}")
         return scores
 
-    def process(self, images: list[Image.Image], prompt: str = None, batch_size: int = 16) -> list[int]:
+    def process(self, svgs: list[str], prompt: str = None, batch_size: int = 16, top_k: int = 2) -> list[int]:
         """
         Ranks a list of images based on predicted aesthetic score using configurable batch processing.
 
@@ -170,12 +191,14 @@ class AestheticRanker(ISVGRanker):
         """
         _ = prompt
 
-        if not images:
-            self.logger.warning("No images provided for ranking")
+        if not svgs:
+            self.logger.warning("No svgs provided for ranking")
             return []
 
         self.logger.info(
-            f"Processing {len(images)} images with batch_size={batch_size}")
+            f"Processing {len(svgs)} svgs with batch_size={batch_size}")
+
+        images, _ = prepare_image_for_ranking(svgs)
 
         all_scores = []
 
@@ -218,7 +241,7 @@ class AestheticRanker(ISVGRanker):
 
         # Log top scores
         if all_scores:
-            top_count = min(5, len(all_scores))
+            top_count = min(top_k, len(all_scores))
             top_scores = [all_scores[idx]
                           for idx in sorted_indices[:top_count]]
             self.logger.info(
@@ -228,21 +251,26 @@ class AestheticRanker(ISVGRanker):
         success_msg = f"Aesthetic ranking complete - Processed {len(images)} images in batches of {batch_size}"
         self.logger.success(success_msg)
 
-        return sorted_indices
+        return sorted_indices[:top_k]
 
 
 if __name__ == "__main__":
     from src.utils.logger import create_console_logger
     import logging
-    logger = create_console_logger("AestheticRanker", logging.INFO, use_colors=True)
-
     import time
+    from src._config import MODEL_DIR
+
+    logger = create_console_logger(
+        "AestheticRanker", logging.DEBUG, use_colors=True)
+    model_path = os.path.join(MODEL_DIR, "sac+logos+ava1-l14-linearMSE.pth")
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
     print("=== AestheticRanker Batch Processing Test ===")
 
     start = time.time()
 
-    aesthetic_ranker = AestheticRanker(logger=logger)
+    aesthetic_ranker = AestheticRanker(
+        model_path=model_path, device=device, logger=logger)
 
     # Load test images
     img1 = Image.open(
@@ -250,14 +278,78 @@ if __name__ == "__main__":
     img2 = Image.open(
         "/home/anhndt/pysvgenius/data/test/image01.png").convert("RGB")
 
-    images = [img1, img2] * 20
+    images = [img1, img2]
 
-    # Test 1: Default batch size
-    print("\n--- Test 1: Default batch size (16) ---")
+    # Test SVG
+    svg = """
+<svg xmlns="http://www.w3.org/2000/svg" width="768" height="768" viewBox="0 0 384 384"><rect width="384" height="384" fill="#98746a"/><polygon points="2.0,0.0 2.0,383.0 140.0,378.0 196.0,8.0 243.0,376.0 382.0,383.0 382.0,0.0" fill="#ab796b"/><polygon points="229.0,242.0 156.0,242.0 141.0,383.0 242.0,380.0" fill="#003951"/><polygon points="166.0,116.0 166.0,219.0 217.0,219.0 217.0,116.0" fill="#5ad4d6"/><polygon points="242.0,223.0 144.0,221.0 142.0,237.0 239.0,240.0" fill="#030615"/><polygon points="149.0,96.0 234.0,99.0 193.0,58.0 198.0,47.0 191.0,36.0 184.0,48.0 190.0,58.0" fill="#f50004"/><polygon points="162.0,100.0 164.0,116.0 220.0,115.0 221.0,100.0" fill="#030615"/><polygon points="162.0,113.0 164.0,219.0" fill="#03253b"/><polygon points="221.0,101.0 218.0,219.0" fill="#03253b"/><polygon points="187.0,134.0 183.0,139.0 183.0,153.0 200.0,153.0 199.0,137.0 194.0,133.0" fill="#fcfdf1"/><polygon points="201.0,245.0 200.0,254.0 219.0,254.0 219.0,245.0" fill="#fcfdf1"/><polygon points="184.0,285.0 162.0,286.0 162.0,293.0 184.0,293.0" fill="#fcfdf1"/><polygon points="210.0,364.0 209.0,374.0 229.0,374.0 231.0,363.0" fill="#fcfdf1"/><polygon points="241.0,382.0 305.0,383.0 303.0,380.0" fill="#03253b"/><polygon points="188.0,137.0 187.0,150.0 196.0,150.0 196.0,139.0 192.0,136.0" fill="#030615"/><polygon points="79.0,383.0 140.0,383.0 140.0,380.0 81.0,380.0" fill="#03253b"/><polygon points="162.0,281.0 184.0,281.0 184.0,276.0 163.0,276.0" fill="#fcfdf1"/><g><circle cx="33.6" cy="30.4" r="9.1" fill="#03253b" /><circle cx="33.6" cy="30.4" r="7.3" fill="#5ad4d6" /><circle cx="33.6" cy="30.4" r="4.7" fill="#03253b" /></g><!-- Circle bytes: outer=53, middle=53, inner=53, total=159, colors: dark=#03253b, light=#5ad4d6, position: top-left --></svg>
+"""
+
+    # Create a simple second SVG for comparison
+    svg2 = """
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="red"/>
+    <circle cx="50" cy="50" r="20" fill="blue"/>
+</svg>
+"""
+
+    svg_list = [svg, svg2]
+
+    # Test 1: Using score() method
+    print("\n--- Test 1: score() method ---")
     start_test = time.time()
     scores = aesthetic_ranker.score(images)
     print(f"Individual scores: {[f'{s:.4f}' for s in scores]}")
     print(f"Score computation time: {time.time() - start_test:.2f}s")
 
+    # Test 2: Using process() method
+    print("\n--- Test 2: process() method ---")
+    start_test = time.time()
+    top_indices_process = aesthetic_ranker.process(
+        svg_list, batch_size=16, top_k=2)
+    print(f"Top indices from process(): {top_indices_process}")
+    print(f"Process time: {time.time() - start_test:.2f}s")
+
+    # Test 3: Using __call__ method (callable interface)
+    print("\n--- Test 3: __call__ method (callable interface) ---")
+    start_test = time.time()
+
+    # Can call like a function
+    top_indices_call = aesthetic_ranker(svg_list, batch_size=16, top_k=2)
+    print(f"Top indices from __call__(): {top_indices_call}")
+
+    # Verify results are identical
+    print(f"Results identical: {top_indices_process == top_indices_call}")
+    print(f"Call time: {time.time() - start_test:.2f}s")
+
+    # Test 4: Different parameters via __call__
+    print("\n--- Test 4: __call__ with different parameters ---")
+
+    # Get only top 1
+    top_1 = aesthetic_ranker(svg_list, top_k=1)
+    print(f"Top 1 index: {top_1}")
+
+    # Use smaller batch size
+    top_indices_small_batch = aesthetic_ranker(svg_list, batch_size=1, top_k=2)
+    print(f"Small batch top indices: {top_indices_small_batch}")
+
+    # Test 5: Larger dataset
+    print("\n--- Test 5: Larger dataset via __call__ ---")
+    large_svgs = svg_list * 5  # 10 images
+    start_test = time.time()
+    top_3 = aesthetic_ranker(large_svgs, batch_size=4, top_k=3)
+    print(f"Top 3 from {len(large_svgs)} images: {top_3}")
+    print(f"Large dataset time: {time.time() - start_test:.2f}s")
+
     end = time.time()
     print(f"\nTotal test time: {end - start:.2f} seconds")
+
+    print("\n=== Usage Examples ===")
+    print("# Method 1: Traditional method call")
+    print("top_indices = ranker.process(images, batch_size=16, top_k=3)")
+    print()
+    print("# Method 2: Callable interface (more convenient)")
+    print("top_indices = ranker(images, batch_size=16, top_k=3)")
+    print()
+    print("# Method 3: Quick ranking with defaults")
+    print("best_2 = ranker(images)  # Uses default batch_size=16, top_k=2")
