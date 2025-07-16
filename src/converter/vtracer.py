@@ -10,8 +10,7 @@ from .base import IImageToConverter
 from PIL import Image
 import os
 
-from utils.image_utils import svg_to_png
-from utils.logger import get_library_logger, create_console_logger
+from src.utils import create_console_logger, svg_to_png, get_library_logger
 
 
 class VtracerConverter(IImageToConverter):
