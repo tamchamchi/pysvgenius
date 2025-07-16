@@ -7,20 +7,20 @@ like aesthetic ranking and text-image similarity ranking. It includes
 a factory pattern for easy instantiation of different ranker implementations.
 """
 
-from .base import ISVGRanker
-from .factory import SVGRankerFactory
+from .base import IRanker
+from .factory import RankerFactory
 from .aesthetic_ranker import AestheticRanker
 from .siglip_ranker import SigLipRanker
-# from .paligemma_ranker import 
+# from .paligemma_ranker import
 
 # Auto-register available rankers
-SVGRankerFactory.register("aesthetic", AestheticRanker)
-SVGRankerFactory.register("siglip", SigLipRanker)
-# SVGRankerFactory.register("paligemma", PaligemmaRanker)
+RankerFactory.register("aesthetic", AestheticRanker)
+RankerFactory.register("siglip", SigLipRanker)
+# RankerFactory.register("paligemma", PaligemmaRanker)
 
 __all__ = [
-    "ISVGRanker",
-    "SVGRankerFactory",
+    "IRanker",
+    "RankerFactory",
     "AestheticRanker",
     "SigLipRanker",
     "PaligemmaRanker"

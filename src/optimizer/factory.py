@@ -1,28 +1,28 @@
-from .base import ISVGOptimizer
+from .base import IOptimizer
 from typing import Type
 
 
-class SVGOptimizerFactory:
+class OptimizerFactory:
     """
     Factory class for registering and creating SVG optimizer strategies.
 
     This class implements the Factory design pattern, allowing you to register
-    multiple SVG optimizer implementations (subclasses of `ISVGOptimizer`)
+    multiple SVG optimizer implementations (subclasses of `IOptimizer`)
     and create instances of them dynamically by name.
 
     Attributes
     ----------
     default_strategy : str
         The default optimizer strategy name to use when none is provided.
-    strategy_map : dict[str, Type[ISVGOptimizer]]
+    strategy_map : dict[str, Type[IOptimizer]]
         Mapping of strategy names to optimizer classes.
     """
 
     default_strategy: str = "diffvg"
-    strategy_map: dict[str, Type[ISVGOptimizer]] = {}
+    strategy_map: dict[str, Type[IOptimizer]] = {}
 
     @classmethod
-    def register(cls, name: str, optimizer_cls: Type[ISVGOptimizer]):
+    def register(cls, name: str, optimizer_cls: Type[IOptimizer]):
         """
         Register a new SVG optimizer class under a strategy name.
 
@@ -30,21 +30,21 @@ class SVGOptimizerFactory:
         ----------
         name : str
             The name used to identify the optimizer strategy.
-        optimizer_cls : Type[ISVGOptimizer]
-            The optimizer class to register. Must be a subclass of `ISVGOptimizer`.
+        optimizer_cls : Type[IOptimizer]
+            The optimizer class to register. Must be a subclass of `IOptimizer`.
 
         Raises
         ------
         TypeError
-            If the provided class is not a subclass of `ISVGOptimizer`.
+            If the provided class is not a subclass of `IOptimizer`.
         """
-        if not issubclass(optimizer_cls, ISVGOptimizer):
+        if not issubclass(optimizer_cls, IOptimizer):
             raise TypeError(
-                f'{optimizer_cls} must inherit from ISVGOptimizer')
+                f'{optimizer_cls} must inherit from IOptimizer')
         cls.strategy_map[name] = optimizer_cls
 
     @classmethod
-    def create(cls, name: str, **kwargs) -> ISVGOptimizer:
+    def create(cls, name: str, **kwargs) -> IOptimizer:
         """
         Create an instance of a registered optimizer strategy.
 
@@ -58,7 +58,7 @@ class SVGOptimizerFactory:
 
         Returns
         -------
-        ISVGOptimizer
+        IOptimizer
             An instance of the requested optimizer strategy.
 
         Raises

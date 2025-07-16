@@ -1,15 +1,17 @@
-from .base import ISVGRanker
+import logging
+from typing import Optional
 
-from PIL import Image
-from transformers import AutoProcessor, AutoModel
 import torch
+from PIL import Image
+from transformers import AutoModel, AutoProcessor
+
 from src.utils.image_utils import prepare_image_for_ranking
 from src.utils.logger import create_console_logger, get_library_logger
-from typing import Optional
-import logging
+
+from .base import IRanker
 
 
-class SigLipRanker(ISVGRanker):
+class SigLipRanker(IRanker):
     def __init__(self, model_path: str = "google/siglip-so400m-patch14-384", device: str = "cuda:0", logger: Optional[logging.Logger] = None):
 
         if logger is not None:

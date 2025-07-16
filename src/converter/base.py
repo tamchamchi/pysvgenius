@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from PIL import Image
 
 
-class IImageToConverter(ABC):
+class IConverter(ABC):
     @abstractmethod
     def process(self, images: list[Image.Image]):
         pass

@@ -7,17 +7,17 @@ like SDXL-Turbo. It includes a factory pattern for easy instantiation of differe
 generator implementations.
 """
 
-from .base import ITextToImageGenerator
-from .factory import TextToImageGeneratorFactory
+from .base import IGenerator
+from .factory import GeneratorFactory
 from .sdxl_turbo_generator import SDXLTurboGenerator
 
 # Auto-register available generators
-TextToImageGeneratorFactory.register("sdxl-turbo", SDXLTurboGenerator)
-TextToImageGeneratorFactory.register(
+GeneratorFactory.register("sdxl-turbo", SDXLTurboGenerator)
+GeneratorFactory.register(
     "sdxl_turbo", SDXLTurboGenerator)  # Alternative name
 
 __all__ = [
-    "ITextToImageGenerator",
-    "TextToImageGeneratorFactory",
+    "IGenerator",
+    "GeneratorFactory",
     "SDXLTurboGenerator"
 ]

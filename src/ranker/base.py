@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class ISVGRanker(ABC):
+class IRanker(ABC):
     @abstractmethod
     def process(self, svgs: list[str], top_k: int, **kwargs):
         pass

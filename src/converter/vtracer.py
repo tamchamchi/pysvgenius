@@ -1,19 +1,20 @@
-from functools import partial
-from concurrent.futures import ProcessPoolExecutor
-import tempfile
-import re
 import logging
+import os
+import re
+import tempfile
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 from typing import Optional
 
 import vtracer
-from .base import IImageToConverter
 from PIL import Image
-import os
 
-from src.utils import create_console_logger, svg_to_png, get_library_logger
+from src.utils import create_console_logger, get_library_logger, svg_to_png
+
+from .base import IConverter
 
 
-class VtracerConverter(IImageToConverter):
+class VtracerConverter(IConverter):
     def __init__(self, logger: Optional[logging.Logger] = None):
         """
         Initialize VtracerConverter.

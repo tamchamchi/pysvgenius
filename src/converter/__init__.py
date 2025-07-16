@@ -7,16 +7,16 @@ like VTracer. It includes a factory pattern for easy instantiation of different
 converter implementations.
 """
 
-from .base import IImageToConverter
-from .factory import ImageToConverterFactory
+from .base import IConverter
+from .factory import ConverterFactory
 from .vtracer import VtracerConverter
 
 # Auto-register available converters
-ImageToConverterFactory.register("vtracer", VtracerConverter)
-ImageToConverterFactory.register("vt", VtracerConverter)  # Short name
+ConverterFactory.register("vtracer", VtracerConverter)
+ConverterFactory.register("vt", VtracerConverter)  # Short name
 
 __all__ = [
-    "IImageToConverter",
-    "ImageToConverterFactory",
+    "IConverter",
+    "ConverterFactory",
     "VtracerConverter"
 ]

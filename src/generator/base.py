@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class ITextToImageGenerator(ABC):
+class IGenerator(ABC):
     @abstractmethod
     def process(prompt: str, num_images: int = 3, **kwargs):
         pass

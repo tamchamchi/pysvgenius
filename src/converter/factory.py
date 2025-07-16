@@ -1,43 +1,43 @@
-from .base import IImageToConverter
+from .base import IConverter
 from typing import Type
 
 
-class ImageToConverterFactory:
+class ConverterFactory:
     """
     A factory class for creating instances of image-to-SVG converters
     based on registered strategy names.
 
     This follows the Factory + Registry design pattern, allowing you to
     dynamically register and instantiate different implementations of
-    IImageToConverter (e.g., Vtracer, Potrace, etc.).
+    IConverter (e.g., Vtracer, Potrace, etc.).
 
     Attributes:
         default_strategy (str): The default converter strategy name used if none is specified.
-        strategy_map (dict[str, Type[IImageToConverter]]): Mapping from strategy names to converter classes.
+        strategy_map (dict[str, Type[IConverter]]): Mapping from strategy names to converter classes.
     """
 
     default_strategy: str = "vtracer"
-    strategy_map: dict[str, Type[IImageToConverter]] = {}
+    strategy_map: dict[str, Type[IConverter]] = {}
 
     @classmethod
-    def register(cls, name: str, converter_cls: Type[IImageToConverter]):
+    def register(cls, name: str, converter_cls: Type[IConverter]):
         """
         Register a new converter class under a given strategy name.
 
         Args:
             name (str): The strategy name to register (e.g., "vtracer").
-            converter_cls (Type[IImageToConverter]): A class implementing the IImageToConverter interface.
+            converter_cls (Type[IConverter]): A class implementing the IConverter interface.
 
         Raises:
-            TypeError: If the provided class does not inherit from IImageToConverter.
+            TypeError: If the provided class does not inherit from IConverter.
         """
-        if not issubclass(converter_cls, IImageToConverter):
+        if not issubclass(converter_cls, IConverter):
             raise TypeError(
-                f'{converter_cls} must inherit from IImageToConverter')
+                f'{converter_cls} must inherit from IConverter')
         cls.strategy_map[name] = converter_cls
 
     @classmethod
-    def create(cls, name: str, **kwargs) -> IImageToConverter:
+    def create(cls, name: str, **kwargs) -> IConverter:
         """
         Create an instance of a registered image-to-converter strategy.
 
@@ -47,7 +47,7 @@ class ImageToConverterFactory:
             **kwargs: Additional keyword arguments passed to the converter's constructor.
 
         Returns:
-            IImageToConverter: An instance of the requested converter class.
+            IConverter: An instance of the requested converter class.
 
         Raises:
             TypeError: If no converter is registered under the provided name.

@@ -1,7 +1,7 @@
 from typing import List
 
 import torch
-from .base import ITextToImageGenerator
+from .base import IGenerator
 from diffusers import AutoPipelineForText2Image
 from PIL import Image
 
@@ -10,7 +10,7 @@ from typing import Optional
 import logging
 
 
-class SDXLTurboGenerator(ITextToImageGenerator):
+class SDXLTurboGenerator(IGenerator):
     """
     A text-to-image generator implementation using Stability AI's SDXL-Turbo model
     and Hugging Face's Diffusers library.

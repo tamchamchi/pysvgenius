@@ -1,30 +1,29 @@
+import logging
+import os
 import tempfile
+import time
+from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pydiffvg
 import torch
+import torch.nn.functional as F
 from PIL import Image
-from transformers import AutoModel
-from .base import ISVGOptimizer
 from torchvision import transforms
 from tqdm import trange
+from transformers import AutoModel
 
-import time
-from .components.image_processor_torch import ImageProcessorTorch
-from .components.aesthetic import AestheticEvaluatorTorch
-
-import torch.nn.functional as F
-import os
-from datetime import datetime
-
-from ..utils.logger import get_library_logger
-from typing import Optional
-import logging
 from src._config import DATA_DIR
 
+from ..utils.logger import get_library_logger
+from .base import IOptimizer
+from .components.aesthetic import AestheticEvaluatorTorch
+from .components.image_processor_torch import ImageProcessorTorch
 
-class DiffVGOptimizer(ISVGOptimizer):
+
+class DiffVGOptimizer(IOptimizer):
     def __init__(self, logger: Optional[logging.Logger] = None, device=torch.device("cuda:0"), seed: int = 43):
         if logger is not None:
             self.logger = logger

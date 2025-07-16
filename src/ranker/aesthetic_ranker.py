@@ -1,14 +1,16 @@
-from .base import ISVGRanker
-import os
 import logging
+import os
 from typing import Optional
 
 import clip
 import torch
 import torch.nn as nn
 from PIL import Image
-from src.utils.logger import get_library_logger
+
 from src.utils.image_utils import prepare_image_for_ranking
+from src.utils.logger import get_library_logger
+
+from .base import IRanker
 
 
 class AestheticPredictor(nn.Module):
@@ -35,7 +37,7 @@ class AestheticPredictor(nn.Module):
         return self.layers(x)
 
 
-class AestheticRanker(ISVGRanker):
+class AestheticRanker(IRanker):
     """
     Ranks a list of SVG images by converting them to PNG and scoring
     their visual quality using CLIP embeddings and a trained aesthetic predictor.
@@ -277,10 +279,11 @@ class AestheticRanker(ISVGRanker):
 
 
 if __name__ == "__main__":
-    from src.utils.logger import create_console_logger
     import logging
     import time
+
     from src._config import MODEL_DIR
+    from src.utils.logger import create_console_logger
 
     logger = create_console_logger(
         "AestheticRanker", logging.DEBUG, use_colors=True)
