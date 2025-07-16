@@ -3,8 +3,8 @@ from abc import ABC, abstractmethod
 
 class ITextToImageGenerator(ABC):
     @abstractmethod
-    def process(prompt: str, **kwargs):
+    def process(prompt: str, num_images: int = 3, **kwargs):
         pass
 
-    def __call__(self, prompt: str, **kwargs):
-        return self.process(prompt, **kwargs)
+    def __call__(self, prompt: str, num_images: int = 3, **kwargs):
+        return self.process(prompt, num_images, **kwargs)

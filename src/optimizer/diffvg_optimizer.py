@@ -16,10 +16,12 @@ from .components.aesthetic import AestheticEvaluatorTorch
 
 import torch.nn.functional as F
 import os
+from datetime import datetime
 
 from ..utils.logger import get_library_logger
 from typing import Optional
 import logging
+from src._config import DATA_DIR
 
 
 class DiffVGOptimizer(ISVGOptimizer):
@@ -57,6 +59,7 @@ class DiffVGOptimizer(ISVGOptimizer):
                 if hasattr(shape, "points") and shape.points is not None:
                     shape.points = shape.points * ratio
                 if hasattr(shape, "center") and shape.center is not None:
+
                     shape.center = shape.center * ratio
                 if hasattr(shape, "radius") and shape.radius is not None:
                     shape.radius = shape.radius * ratio
@@ -235,10 +238,7 @@ class DiffVGOptimizer(ISVGOptimizer):
     def run(
         self,
         args,
-        aesthetic_evaluator_torch,
         similarity_mode,
-        siglip_model=None,
-        target_image_embedding=None,
         device=torch.device("cuda:0"),
         dtype=torch.float16,
         image=None,
@@ -256,11 +256,6 @@ class DiffVGOptimizer(ISVGOptimizer):
         to_tensor = transforms.ToTensor()
         tensor_image = to_tensor(image)
         tensor_image = tensor_image.to(device)
-
-        # Create two image processors: one for processing renderings, one for augmentations
-        seed = int(time.time() * 1000) % (2**32 - 1)
-        image_processor_torch = ImageProcessorTorch(seed=seed).to(device)
-        image_processor_torch_ref = ImageProcessorTorch(seed=seed).to(device)
 
         # Main optimization loop
         for iter in trange(args.iterations):
@@ -286,7 +281,7 @@ class DiffVGOptimizer(ISVGOptimizer):
                     self.canvas_height,
                     self.shapes,
                     self.shape_groups,
-                    seed,
+                    self.seed,
                 )
                 .permute(2, 0, 1)
                 .unsqueeze(0)
@@ -299,11 +294,11 @@ class DiffVGOptimizer(ISVGOptimizer):
 
             # --- Apply JPEG compression simulation if beyond warm-up stage ---
             if iter < args.jpeg_iter:
-                processed_image_render_batch = image_processor_torch.apply(
+                processed_image_render_batch = self.image_processor_torch.apply(
                     img_render_batch, skip_jpeg_compression=True
                 )
             else:
-                processed_image_render_batch = image_processor_torch.apply(
+                processed_image_render_batch = self.image_processor_torch.apply(
                     img_render_batch
                 )
 
@@ -315,7 +310,7 @@ class DiffVGOptimizer(ISVGOptimizer):
             # --- Prepare target image batch and augment with random crop/resize ---
             tensor_image_batch = tensor_image.repeat(batch_size, 1, 1, 1)
             tensor_image_cropped_batch = (
-                image_processor_torch_ref.apply_random_crop_resize(
+                self.image_processor_torch_ref.apply_random_crop_resize(
                     tensor_image_batch)
             )
 
@@ -326,49 +321,50 @@ class DiffVGOptimizer(ISVGOptimizer):
             )
 
             # --- Compute similarity loss using SIGLIP model ---
-            try:
-                # (B, C, H, W), [0,1] -> (B, C, H, W), [-1, 1]
-                # The SIGLIP processor performs normalization internally, so you can either pass [0,1] or manually match the model's expected input.
-                # Here we follow exp028 and manually normalize to [-1, 1].
-                render_pixel_values_batch = (
-                    processed_image_render_batch * 2.0) - 1.0
-                render_pixel_values_batch = render_pixel_values_batch.to(
-                    dtype=siglip_model.dtype
-                )  # Match the dtype of the SIGLIP model
+            if similarity_mode == "siglip":
+                try:
+                    # (B, C, H, W), [0,1] -> (B, C, H, W), [-1, 1]
+                    # The SIGLIP processor performs normalization internally, so you can either pass [0,1] or manually match the model's expected input.
+                    # Here we follow exp028 and manually normalize to [-1, 1].
+                    render_pixel_values_batch = (
+                        processed_image_render_batch * 2.0) - 1.0
+                    render_pixel_values_batch = render_pixel_values_batch.to(
+                        dtype=self.siglip_model.dtype
+                    )  # Match the dtype of the SIGLIP model
 
-                # Resize to the input size expected by siglip_model
-                render_pixel_values_batch = F.interpolate(
-                    render_pixel_values_batch,
-                    size=siglip_model.config.vision_config.image_size,
-                    mode="bilinear",
-                    align_corners=False,
-                )
-                # Extract image embeddings and compute cosine similarity with target
-                rendered_image_embedding_batch = siglip_model.get_image_features(
-                    pixel_values=render_pixel_values_batch
-                )  # (B, embed_dim)
+                    # Resize to the input size expected by siglip_model
+                    render_pixel_values_batch = F.interpolate(
+                        render_pixel_values_batch,
+                        size=self.siglip_model.config.vision_config.image_size,
+                        mode="bilinear",
+                        align_corners=False,
+                    )
+                    # Extract image embeddings and compute cosine similarity with target
+                    rendered_image_embedding_batch = self.siglip_model.get_image_features(
+                        pixel_values=render_pixel_values_batch
+                    )  # (B, embed_dim)
 
-                cosine_similarity_batch = torch.nn.functional.cosine_similarity(
-                    target_image_embedding, rendered_image_embedding_batch, dim=-1
-                )  # (B,)
-                similarity_loss_raw = (
-                    -cosine_similarity_batch.mean()
-                )  # Negative sign for loss
-                # Normalization may not be necessary for SIGLIP, needs further consideration
-                similarity_loss = similarity_loss_raw
+                    cosine_similarity_batch = torch.nn.functional.cosine_similarity(
+                        self.target_image_emdedding, rendered_image_embedding_batch, dim=-1
+                    )  # (B,)
+                    similarity_loss_raw = (
+                        -cosine_similarity_batch.mean()
+                    )  # Negative sign for loss
+                    # Normalization may not be necessary for SIGLIP, needs further consideration
+                    similarity_loss = similarity_loss_raw
 
-            except Exception as e:
-                self.logger.error(
-                    f"Exception occurred during SIGLIP similarity calculation (iter {iter}): {e}"
-                )
-                break
+                except Exception as e:
+                    self.logger.error(
+                        f"Exception occurred during SIGLIP similarity calculation (iter {iter}): {e}"
+                    )
+                    break
 
             # --- Compute aesthetic score and loss ---
             try:
                 # Pass processed_img_render_batch to the aesthetic_evaluator_torch
                 # The resolution can be different from PaliGemma (AestheticEvaluatorTorch handles resizing internally)
                 # processed_img_render_batch is in shape BCHW, range [0,1], with the main dtype
-                aesthetic_score_batch = aesthetic_evaluator_torch.score(
+                aesthetic_score_batch = self.aesthetic_evaluator_torch.score(
                     processed_image_render_batch.to(
                         device, dtype=torch.float16)
                 )  # (B,)
@@ -503,7 +499,7 @@ class DiffVGOptimizer(ISVGOptimizer):
         )
         return self.shapes, self.shape_groups, -aesthetic_loss.item()
 
-    def _load_aesthetic_evaluator(self):
+    def _load_aesthetic_evaluator(self) -> AestheticEvaluatorTorch:
         self.logger.debug("Loading Aesthetic Evaluator ...")
         try:
             aesthetic_evaluator_torch = AestheticEvaluatorTorch()
@@ -514,7 +510,7 @@ class DiffVGOptimizer(ISVGOptimizer):
                 f"Failed to initialize AestheticEvaluatorTorch: {e}")
             raise
 
-    def _load_image_processor_torch(self):
+    def _load_image_processor_torch(self) -> ImageProcessorTorch:
         self.logger.debug("Loading Image Processor Torch ...")
         try:
             image_processor_torch = ImageProcessorTorch(
@@ -527,13 +523,63 @@ class DiffVGOptimizer(ISVGOptimizer):
                 f"Failed to initialize ImageProcessorTorch: {e}")
             raise
 
-    def build(self, similarity_model: str = "siglip"):
+    def _load_siglip_model(self, model_path="google/siglip-so400m-patch14-384", device=torch.device("cuda:0"), dtype=torch.float16):
+        self.logger.debug(f"Loading SIGLIP model from {model_path}")
+        try:
+            model = AutoModel.from_pretrained(
+                model_path, torch_dtype=dtype).to(device)
+            model.eval()
+            self.logger.success(
+                f"SIGLIP model initialized on device: {device}")
+            return model
+        except Exception as e:
+            self.logger.error(
+                f"Failed to initialze SIGLIP model: {e}"
+            )
+            raise
+
+    def build(self, similarity_mode: str = "siglip"):
         self.logger.debug("Starting DiffVG optimizer build process")
         self.aesthetic_evaluator_torch = self._load_aesthetic_evaluator()
+
+        # Create two image processors: one for processing renderings, one for augmentations
         self.image_processor_torch = self._load_image_processor_torch()
         self.image_processor_torch_ref = self._load_image_processor_torch()
-        
-    def process(self, svg: str, image: Image.Image, args):
+
+        if similarity_mode == "siglip":
+            self.siglip_model = self._load_siglip_model()
+
+    def _save_optimized_svg(self, output_path: str = None) -> str:
+        """Save the optimized SVG to a results folder"""
+        try:
+            # Create results directory if it doesn't exist
+            results_dir = os.path.join(DATA_DIR, "results")
+            results_dir.mkdir(exist_ok=True)
+
+            # Generate filename with timestamp if not provided
+            if output_path is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = results_dir / f"optimized_svg_{timestamp}.svg"
+            else:
+                output_path = results_dir / output_path
+
+            # Save the optimized SVG
+            pydiffvg.save_svg(
+                str(output_path),
+                self.canvas_width,
+                self.canvas_height,
+                self.shapes,
+                self.shape_groups
+            )
+
+            self.logger.success(f"Optimized SVG saved to: {output_path}")
+            return str(output_path)
+
+        except Exception as e:
+            self.logger.error(f"Failed to save optimized SVG: {e}")
+            return None
+
+    def process(self, svg: str, image: Image.Image, args, output_filename: str = None):
         # Convert svg to svg_file_path
         tmp_dir = tempfile.TemporaryDirectory()
         tmp_file_path = os.path.join(tmp_dir.name, "tmp.svg")
@@ -555,6 +601,10 @@ class DiffVGOptimizer(ISVGOptimizer):
             params,
         ) = result
 
+        # Compute target image embeddding
+        self.target_image_emdedding = self._calculate_target_image_embedding_with_siglip(
+            image, self.siglip_model, device=self.device, dtype=torch.float16)
+
         # Set up optimizer
         optimizer_result = self._setup_optimizer(args, params)
         if optimizer_result is None:
@@ -563,3 +613,27 @@ class DiffVGOptimizer(ISVGOptimizer):
 
         self.optimizer, self.param_groups = optimizer_result
         self.logger.success("DiffVG optimizer build completed successfully")
+
+        self.logger.info("Starting optimization process...")
+        try:
+            optimization_result = self.run(
+                args, similarity_mode="siglip", device=self.device, dtype=torch.float16)
+
+            # Save the optimized SVG after successful optimization
+            if optimization_result is not None:
+                saved_path = self._save_optimized_svg(output_filename)
+                if saved_path:
+                    self.logger.info(
+                        f"Optimization completed and SVG saved to: {saved_path}")
+                    return optimization_result, saved_path
+                else:
+                    return optimization_result, None
+            else:
+                self.logger.warning("Optimization returned None")
+                return None, None
+
+        except Exception as e:
+            self.logger.error(f"Optimization failed: {e}")
+            return None, None
+
+    

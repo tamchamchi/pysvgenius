@@ -19,12 +19,20 @@ class SigLipRanker(ISVGRanker):
                 f"{__name__}.{self.__class__.__name__}")
         self.device = device
         self.model_path = model_path
-        self.processor = AutoProcessor.from_pretrained(
-            self.model_path, use_fast=True)
-        self.model = AutoModel.from_pretrained(self.model_path).to(self.device)
+        try:
+            self.processor = AutoProcessor.from_pretrained(
+                self.model_path, use_fast=True)
+            self.model = AutoModel.from_pretrained(
+                self.model_path).to(self.device)
 
-        self.logger.info(f"Using device: {self.device}")
-        self.logger.info(f"Model path: {self.model_path}")
+            self.logger.info(f"Using device: {self.device}")
+            self.logger.info(f"Model path: {self.model_path}")
+            self.logger.success(
+                "SIGLIP Model and processor loaded successfully.")
+        except Exception as e:
+            self.logger.error(
+                f"❌ Failed to load model or processor: {type(e).__name__}: {e}")
+            raise
 
     def score(self, images: list[Image.Image], prompt: str) -> list[float]:
         """
@@ -74,12 +82,12 @@ class SigLipRanker(ISVGRanker):
             self.logger.error(f"Failed to compute SigLIP scores: {str(e)}")
             return [0.0] * len(images)
 
-    def process(self, svg_list: list[str], prompt: str, batch_size: int = 16, top_k: int = 2) -> list[int]:
+    def process(self, svgs: list[str], prompt: str, batch_size: int = 16, top_k: int = 2) -> list[int]:
         """
         Ranks a list of SVGs based on SigLIP similarity scores with the given prompt.
 
         Args:
-            svg_list (list[str]): List of SVG strings to rank.
+            svgs (list[str]): List of SVG strings to rank.
             prompt (str): Text prompt to compare against.
             batch_size (int): Number of images to process in each batch. Default is 16.
             top_k (int): Number of top ranked indices to return. Default is 2.
@@ -87,7 +95,7 @@ class SigLipRanker(ISVGRanker):
         Returns:
             list[int]: Indices sorted by score in descending order (top_k only).
         """
-        if not svg_list:
+        if not svgs:
             self.logger.warning("No SVGs provided for ranking")
             return []
 
@@ -96,17 +104,17 @@ class SigLipRanker(ISVGRanker):
             return []
 
         self.logger.info(
-            f"Processing {len(svg_list)} SVGs with prompt: '{prompt}' using batch_size={batch_size}")
+            f"Processing {len(svgs)} SVGs with prompt: '{prompt}' using batch_size={batch_size}")
 
         # Convert all SVGs to images using robust conversion
-        images, indexs = prepare_image_for_ranking(svg_list)
+        images, indexs = prepare_image_for_ranking(svgs)
 
         if not images:
             self.logger.warning("No valid images after SVG conversion")
             return []
 
         self.logger.info(
-            f"Successfully converted {len(images)}/{len(svg_list)} SVGs to images")
+            f"Successfully converted {len(images)}/{len(svgs)} SVGs to images")
 
         # Process images in batches
         all_scores = []
@@ -140,7 +148,7 @@ class SigLipRanker(ISVGRanker):
             return []
 
         # Create full scores array with 0.0 for failed conversions
-        full_scores = [0.0] * len(svg_list)
+        full_scores = [0.0] * len(svgs)
         for idx, valid_idx in enumerate(indexs):
             full_scores[valid_idx] = all_scores[idx]
 
@@ -161,18 +169,18 @@ class SigLipRanker(ISVGRanker):
                 f"Top {top_count} scores: {[f'{s:.4f}' for s in top_scores]}")
 
         # Log SUCCESS message when completed
-        success_msg = f"SigLIP ranking complete - Processed {len(svg_list)} SVGs"
+        success_msg = f"SigLIP ranking complete - Processed {len(svgs)} SVGs"
         self.logger.success(success_msg)
 
         return sorted_indices[:top_k]
 
-    def __call__(self, svg_list: list[str], prompt: str, batch_size: int = 16, top_k: int = 2) -> list[int]:
+    def __call__(self, svgs: list[str], prompt: str, batch_size: int = 16, top_k: int = 2) -> list[int]:
         """
         Make SigLipRanker callable like a function.
         This is a convenience method that delegates to the process() method.
 
         Args:
-            svg_list (list[str]): List of SVG strings to rank.
+            svgs (list[str]): List of SVG strings to rank.
             prompt (str): Text prompt to compare against.
             batch_size (int): Number of images to process in each batch. Default is 16.
             top_k (int): Number of top ranked indices to return. Default is 2.
@@ -182,13 +190,13 @@ class SigLipRanker(ISVGRanker):
 
         Example:
             >>> ranker = SigLipRanker()
-            >>> svg_list = [svg1, svg2, svg3]
-            >>> top_indices = ranker(svg_list, "a lighthouse", batch_size=8, top_k=2)
+            >>> svgs = [svg1, svg2, svg3]
+            >>> top_indices = ranker(svgs, "a lighthouse", batch_size=8, top_k=2)
         """
-        self.logger.debug(f"__call__ invoked with {len(svg_list) if svg_list else 0} SVGs, "
+        self.logger.debug(f"__call__ invoked with {len(svgs) if svgs else 0} SVGs, "
                           f"prompt='{prompt}', batch_size={batch_size}, top_k={top_k}")
 
-        return self.process(svg_list=svg_list, prompt=prompt, batch_size=batch_size, top_k=top_k)
+        return self.process(svgs=svgs, prompt=prompt, batch_size=batch_size, top_k=top_k)
 
 
 if __name__ == "__main__":
@@ -216,17 +224,17 @@ if __name__ == "__main__":
 </svg>
 """
 
-    svg_list = [svg, svg2]
+    svgs = [svg, svg2]
     prompt = "a lighthouse overlooking the ocean"
 
     # Test 1: Using process() method
     print("\n--- Test 1: process() method ---")
     print(f"Prompt: '{prompt}'")
-    print(f"Number of SVGs: {len(svg_list)}")
+    print(f"Number of SVGs: {len(svgs)}")
 
     start_test = time.time()
     top_indices_process = ranker.process(
-        svg_list, prompt, batch_size=16, top_k=2)
+        svgs, prompt, batch_size=16, top_k=2)
     print(f"Top indices from process(): {top_indices_process}")
     print(f"Process time: {time.time() - start_test:.2f}s")
 
@@ -235,7 +243,7 @@ if __name__ == "__main__":
     start_test = time.time()
 
     # Can call like a function
-    top_indices_call = ranker(svg_list, prompt, batch_size=16, top_k=2)
+    top_indices_call = ranker(svgs, prompt, batch_size=16, top_k=2)
     print(f"Top indices from __call__(): {top_indices_call}")
 
     # Verify results are identical
@@ -246,12 +254,12 @@ if __name__ == "__main__":
     print("\n--- Test 3: Different parameters ---")
 
     # Get only top 1
-    top_1 = ranker(svg_list, prompt, top_k=1)
+    top_1 = ranker(svgs, prompt, top_k=1)
     print(f"Top 1 index: {top_1}")
 
     # Different prompt
     different_prompt = "abstract colorful art"
-    top_different = ranker(svg_list, different_prompt, top_k=2)
+    top_different = ranker(svgs, different_prompt, top_k=2)
     print(f"With prompt '{different_prompt}': {top_different}")
 
     # Test 4: Test with individual image scoring
@@ -274,10 +282,10 @@ if __name__ == "__main__":
 
     print("\n=== Usage Examples ===")
     print("# Method 1: Traditional method call")
-    print("top_indices = ranker.process(svg_list, prompt, batch_size=16, top_k=3)")
+    print("top_indices = ranker.process(svgs, prompt, batch_size=16, top_k=3)")
     print("")
     print("# Method 2: Callable interface (more convenient)")
-    print("top_indices = ranker(svg_list, prompt, batch_size=16, top_k=3)")
+    print("top_indices = ranker(svgs, prompt, batch_size=16, top_k=3)")
     print("")
     print("# Method 3: Quick ranking with defaults")
-    print("best_2 = ranker(svg_list, prompt)  # Uses default batch_size=16, top_k=2")
+    print("best_2 = ranker(svgs, prompt)  # Uses default batch_size=16, top_k=2")

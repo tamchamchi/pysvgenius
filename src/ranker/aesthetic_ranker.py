@@ -41,7 +41,13 @@ class AestheticRanker(ISVGRanker):
     their visual quality using CLIP embeddings and a trained aesthetic predictor.
     """
 
-    def __init__(self, model_path: str = None, device: str = "cuda:0", logger: Optional[logging.Logger] = None):
+    def __init__(
+        self,
+        model_path: str = None,
+        clip_model_path: str = None,
+        device: str = "cuda:0",
+        logger: Optional[logging.Logger] = None,
+    ):
         """
         Initialize AestheticRanker.
 
@@ -59,14 +65,16 @@ class AestheticRanker(ISVGRanker):
         self.logger.info("Initializing AestheticRanker")
 
         self.model_path = model_path
+        self.clip_model_path = clip_model_path
         self.device = device
         self.logger.info(f"Using device: {self.device}")
         self.logger.debug(f"Model path: {self.model_path}")
 
         self.predictor, self.clip_model, self.preprocessor = self._load()
-        self.logger.success("AestheticRanker initialization complete")
 
-    def __call__(self, svgs: list[str], prompt: str = None, batch_size: int = 16, top_k: int = 2) -> list[int]:
+    def __call__(
+        self, svgs: list[str], prompt: str = None, batch_size: int = 16, top_k: int = 2
+    ) -> list[int]:
         """
         Make AestheticRanker callable like a function.
         This is a convenience method that delegates to the process() method.
@@ -85,10 +93,14 @@ class AestheticRanker(ISVGRanker):
             >>> images = [svg1, svg2, svg3]
             >>> top_indices = ranker(svgs, batch_size=8, top_k=2)  # Returns top 2 indices
         """
-        self.logger.debug(f"__call__ invoked with {len(svgs) if svgs else 0} images, "
-                          f"batch_size={batch_size}, top_k={top_k}")
+        self.logger.debug(
+            f"__call__ invoked with {len(svgs) if svgs else 0} images, "
+            f"batch_size={batch_size}, top_k={top_k}"
+        )
 
-        return self.process(svgs=svgs, prompt=prompt, batch_size=batch_size, top_k=top_k)
+        return self.process(
+            svgs=svgs, prompt=prompt, batch_size=batch_size, top_k=top_k
+        )
 
     def _load(self):
         """
@@ -113,8 +125,8 @@ class AestheticRanker(ISVGRanker):
 
             self.logger.debug("Loading CLIP ViT-L/14 model")
             clip_model, preprocessor = clip.load(
-                "ViT-L/14", device=self.device)
-            self.logger.success("Models loaded successfully")
+                self.clip_model_path, device=self.device)
+            self.logger.success("Aesthetic Models loaded successfully")
 
             return predictor, clip_model, preprocessor
         except Exception as e:
@@ -142,7 +154,8 @@ class AestheticRanker(ISVGRanker):
             return []
 
         self.logger.debug(
-            f"Computing aesthetic scores for batch of {len(images)} images")
+            f"Computing aesthetic scores for batch of {len(images)} images"
+        )
 
         # Preprocess all images into a batch
         batch_tensors = []
@@ -172,10 +185,13 @@ class AestheticRanker(ISVGRanker):
                 scores = normalized_scores.tolist()
 
         self.logger.debug(
-            f"Computed {len(scores)} aesthetic scores: {[f'{s:.4f}' for s in scores]}")
+            f"Computed {len(scores)} aesthetic scores: {[f'{s:.4f}' for s in scores]}"
+        )
         return scores
 
-    def process(self, svgs: list[str], prompt: str = None, batch_size: int = 16, top_k: int = 2) -> list[int]:
+    def process(
+        self, svgs: list[str], prompt: str = None, batch_size: int = 16, top_k: int = 2
+    ) -> list[int]:
         """
         Ranks a list of images based on predicted aesthetic score using configurable batch processing.
 
@@ -207,8 +223,10 @@ class AestheticRanker(ISVGRanker):
             batch_end = min(batch_start + batch_size, len(images))
             current_batch = images[batch_start:batch_end]
 
-            self.logger.debug(f"Processing batch {batch_start//batch_size + 1}/{(len(images) + batch_size - 1)//batch_size} "
-                              f"(images {batch_start+1}-{batch_end})")
+            self.logger.debug(
+                f"Processing batch {batch_start // batch_size + 1}/{(len(images) + batch_size - 1) // batch_size} "
+                f"(images {batch_start + 1}-{batch_end})"
+            )
 
             try:
                 # Process current batch
@@ -222,13 +240,15 @@ class AestheticRanker(ISVGRanker):
 
             except Exception as e:
                 self.logger.error(
-                    f"Failed to process batch {batch_start//batch_size + 1}: {str(e)}")
+                    f"Failed to process batch {batch_start // batch_size + 1}: {str(e)}"
+                )
                 # Add zeros for failed batch to maintain index consistency
                 all_scores.extend([0.0] * len(current_batch))
 
         if len(all_scores) != len(images):
             self.logger.error(
-                f"Score count mismatch: {len(all_scores)} scores for {len(images)} images")
+                f"Score count mismatch: {len(all_scores)} scores for {len(images)} images"
+            )
             return []
 
         # Sort indices by score in descending order
@@ -237,7 +257,8 @@ class AestheticRanker(ISVGRanker):
         sorted_indices = [index for index, score in sorted_pairs]
 
         self.logger.debug(
-            f"Sorted indices (desc): {sorted_indices[:10]}{'...' if len(sorted_indices) > 10 else ''}")
+            f"Sorted indices (desc): {sorted_indices[:10]}{'...' if len(sorted_indices) > 10 else ''}"
+        )
 
         # Log top scores
         if all_scores:
@@ -245,7 +266,8 @@ class AestheticRanker(ISVGRanker):
             top_scores = [all_scores[idx]
                           for idx in sorted_indices[:top_count]]
             self.logger.info(
-                f"Top {top_count} scores: {[f'{s:.4f}' for s in top_scores]}")
+                f"Top {top_count} scores: {[f'{s:.4f}' for s in top_scores]}"
+            )
 
         # Log SUCCESS message when completed
         success_msg = f"Aesthetic ranking complete - Processed {len(images)} images in batches of {batch_size}"
@@ -270,7 +292,8 @@ if __name__ == "__main__":
     start = time.time()
 
     aesthetic_ranker = AestheticRanker(
-        model_path=model_path, device=device, logger=logger)
+        model_path=model_path, device=device, logger=logger
+    )
 
     # Load test images
     img1 = Image.open(

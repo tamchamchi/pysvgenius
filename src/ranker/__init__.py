@@ -11,12 +11,12 @@ from .base import ISVGRanker
 from .factory import SVGRankerFactory
 from .aesthetic_ranker import AestheticRanker
 from .siglip_ranker import SigLipRanker
-from .paligemma_ranker import PaligemmaRanker
+# from .paligemma_ranker import 
 
 # Auto-register available rankers
 SVGRankerFactory.register("aesthetic", AestheticRanker)
 SVGRankerFactory.register("siglip", SigLipRanker)
-SVGRankerFactory.register("paligemma", PaligemmaRanker)
+# SVGRankerFactory.register("paligemma", PaligemmaRanker)
 
 __all__ = [
     "ISVGRanker",
