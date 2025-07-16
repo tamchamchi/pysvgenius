@@ -33,9 +33,6 @@ class VtracerConverter(IImageToConverter):
 
         self.logger.debug("VtracerConverter initialized")
 
-    def __call__(self, images, **kwargs):
-        return self.process(images, **kwargs)
-
     def _convert_svg_with_vtracer(
         self, img: Image.Image, image_size: tuple[int, int] = (256, 256)
     ) -> str:
@@ -282,6 +279,22 @@ class VtracerConverter(IImageToConverter):
                 hi = mid - 1
                 self.logger.debug(
                     f"Size {mid} too large, trying smaller sizes")
+
+        # Final check: if we still don't have a valid SVG, try the minimum size
+        if best_svg is None:
+            self.logger.warning(
+                f"No size found within range {size_range}, trying minimum size")
+            svg = self._convert_svg_with_vtracer(image, (lo, lo))
+            svg = self._svg_compress(svg)
+            if len(svg) <= limit:
+                best_svg = svg
+                self.logger.info(f"Found valid SVG at minimum size {lo}")
+            else:
+                self.logger.error(
+                    f"Even minimum size {lo} produces SVG too large ({len(svg)} > {limit})")
+                # Return a minimal SVG as fallback
+                best_svg = f'<svg width="{lo}" height="{lo}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="gray"/></svg>'
+                self.logger.warning("Returning fallback SVG")
 
         return best_svg
 

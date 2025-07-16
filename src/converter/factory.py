@@ -1,4 +1,4 @@
-from base import IImageToConverter
+from .base import IImageToConverter
 from typing import Type
 
 

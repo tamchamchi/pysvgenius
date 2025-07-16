@@ -1,6 +1,6 @@
 from typing import Optional, Type
 
-from base import ITextToImageGenerator
+from .base import ITextToImageGenerator
 
 
 class TextToImageGeneratorFactory:

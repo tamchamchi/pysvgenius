@@ -8,4 +8,4 @@ class IImageToConverter(ABC):
         pass
 
     def __call__(self, images: list[Image.Image], **kwargs):
-        self.process(images, **kwargs)
+        return self.process(images, **kwargs)
