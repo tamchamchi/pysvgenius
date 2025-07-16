@@ -1,44 +1,44 @@
-from .base import ISVGRanker
+from .base import IRanker
 from typing import Type
 
 
-class SVGRankerFactory:
+class RankerFactory:
     """
-    A factory class for creating instances of SVG ranking strategies
-    that implement the ISVGRanker interface.
+    A factory class for creating instances of  ranking strategies
+    that implement the IRanker interface.
 
     This follows the Factory + Registry pattern, allowing flexible
     selection and registration of different ranking algorithms.
 
     Attributes:
         default_strategy (str): Default ranker name to use when none is specified.
-        strategy_map (dict[str, Type[ISVGRanker]]): Mapping of ranker names to their implementation classes.
+        strategy_map (dict[str, Type[IRanker]]): Mapping of ranker names to their implementation classes.
     """
 
     default_strategy: str = "multi"
-    strategy_map: dict[str, Type[ISVGRanker]] = {}
+    strategy_map: dict[str, Type[IRanker]] = {}
 
     @classmethod
-    def register(cls, name: str, ranker_cls: Type[ISVGRanker]):
+    def register(cls, name: str, ranker_cls: Type[IRanker]):
         """
-        Register a new SVG ranker class under a specific name.
+        Register a new  ranker class under a specific name.
 
         Args:
             name (str): The strategy name to associate with the ranker.
-            ranker_cls (Type[ISVGRanker]): A class implementing the ISVGRanker interface.
+            ranker_cls (Type[IRanker]): A class implementing the IRanker interface.
 
         Raises:
-            TypeError: If ranker_cls does not inherit from ISVGRanker.
+            TypeError: If ranker_cls does not inherit from IRanker.
         """
-        if not issubclass(ranker_cls, ISVGRanker):
+        if not issubclass(ranker_cls, IRanker):
             raise TypeError(
-                f'{ranker_cls} must inherit from ISVGRanker')
+                f'{ranker_cls} must inherit from IRanker')
         cls.strategy_map[name] = ranker_cls
 
     @classmethod
-    def create(cls, name: str, **kwargs) -> ISVGRanker:
+    def create(cls, name: str, **kwargs) -> IRanker:
         """
-        Create an instance of a registered SVG ranker strategy.
+        Create an instance of a registered  ranker strategy.
 
         Args:
             name (str): The name of the registered ranker strategy to use.
@@ -46,7 +46,7 @@ class SVGRankerFactory:
             **kwargs: Additional arguments to pass to the ranker constructor.
 
         Returns:
-            ISVGRanker: An instance of the selected ranker.
+            IRanker: An instance of the selected ranker.
 
         Raises:
             TypeError: If no ranker is registered under the provided name.
