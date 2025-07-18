@@ -44,6 +44,7 @@ jsonpointer==3.0.0
 jupyter_client @ file:///home/conda/feedstock_root/build_artifacts/jupyter_client_1733440914442/work
 jupyter_core @ file:///home/conda/feedstock_root/build_artifacts/jupyter_core_1748333051527/work
 kiwisolver==1.4.8
+kmeans-gpu==0.0.5
 kornia==0.8.1
 kornia_rs==0.1.9
 lazy_loader==0.4

@@ -22,7 +22,6 @@ class SDXLTurboGenerator(IGenerator):
         model_path (str): Path or model ID for the pretrained SDXL-Turbo model.
         device (str): Device to run the model on, typically "cuda" or "cpu".
         seed (int): Random seed for reproducible outputs.
-        lora_path (Optional[str]): Path to a LoRA model if using LoRA fine-tuning.
     """
 
     def __init__(

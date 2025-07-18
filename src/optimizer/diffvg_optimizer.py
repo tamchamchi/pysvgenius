@@ -15,9 +15,15 @@ from torchvision import transforms
 from tqdm import trange
 from transformers import AutoModel
 
-from src._config import DATA_DIR
+from src._config import (
+    AESTHETIC_MODEL_PATH,
+    CLIP_MODEL_PATH,
+    DATA_DIR,
+    FORWARD_CROP_PERCENT,
+)
+from src.utils.logger import get_library_logger
+from src.utils.svg_utils import optimize_svg_size
 
-from ..utils.logger import get_library_logger
 from .base import IOptimizer
 from .components.aesthetic import AestheticEvaluatorTorch
 from .components.image_processor_torch import ImageProcessorTorch
@@ -195,11 +201,11 @@ class DiffVGOptimizer(IOptimizer):
         target_img_tensor = target_img_tensor.unsqueeze(0)
 
         # Convert to float and normalize to [-1.0, 1.0]
-        target_img_tensor = target_img_np.float() / 255.0
-        target_img_torch = target_img_np * 2.0 - 1.0
+        target_img_tensor = target_img_tensor / 255.0
+        target_img_tensor = target_img_tensor * 2.0 - 1.0
 
         # Fast version
-        pixel_values = target_img_torch.to(device=device, dtype=dtype)
+        pixel_values = target_img_tensor.to(device=device, dtype=dtype)
 
         with torch.no_grad():
             target_embedding = model.get_image_features(
@@ -237,10 +243,8 @@ class DiffVGOptimizer(IOptimizer):
     def run(
         self,
         args,
-        similarity_mode,
         device=torch.device("cuda:0"),
         dtype=torch.float16,
-        image=None,
     ):
         # Record start time and initialize best loss
         start_time = time.time()
@@ -250,14 +254,36 @@ class DiffVGOptimizer(IOptimizer):
         warmup_iteration = args.warmup_iter
         batch_size = args.batch_size
 
+        self.logger.debug(
+            f"Starting optimization with {args.iterations} iterations")
+        self.logger.debug(f"Warmup iterations: {warmup_iteration}")
+        self.logger.debug(f"Batch size: {batch_size}")
+        self.logger.debug(f"Device: {device}, dtype: {dtype}")
+
+        # Initialize variables to prevent "referenced before assignment" errors
+        aesthetic_loss = torch.tensor(0.0, device=device, dtype=dtype)
+        similarity_loss = torch.tensor(0.0, device=device, dtype=dtype)
+        similarity_loss_raw = torch.tensor(
+            np.inf, device=device, dtype=dtype)
+        mse_loss = torch.tensor(0.0, device=device, dtype=dtype)
+        loss = torch.tensor(0.0, device=device, dtype=dtype)
+
         # Convert the target PIL image to tensor and move to device
-        image = image.resize((self.canvas_width, self.canvas_height))
+        image = self.image.resize((self.canvas_width, self.canvas_height))
         to_tensor = transforms.ToTensor()
         tensor_image = to_tensor(image)
         tensor_image = tensor_image.to(device)
 
+        self.logger.debug(
+            f"Target image converted to tensor: {tensor_image.shape}")
+
         # Main optimization loop
         for iter in trange(args.iterations):
+            if iter == 0:
+                self.logger.debug("Starting first iteration")
+            elif iter % 50 == 0:
+                self.logger.debug(f"Iteration {iter}/{args.iterations}")
+
             # --- Learning rate scheduling ---
             for param_group in self.optimizer.param_groups:
                 group_init_lr = param_group["initial_lr"]
@@ -273,6 +299,8 @@ class DiffVGOptimizer(IOptimizer):
 
             self.optimizer.zero_grad()
 
+            self.logger.debug(f"Iter {iter}: Starting rendering")
+
             # --- Render current SVG scene into an image tensor (1, C, H, W) ---
             img_render_single = (
                 self._render(
@@ -281,7 +309,7 @@ class DiffVGOptimizer(IOptimizer):
                     self.shapes,
                     self.shape_groups,
                     self.seed,
-                )
+                )[:, :, :3]
                 .permute(2, 0, 1)
                 .unsqueeze(0)
                 .to(device, dtype=dtype)
@@ -291,26 +319,28 @@ class DiffVGOptimizer(IOptimizer):
                 batch_size, 1, 1, 1
             )  # (B, C, H, W) of svg
 
+            self.logger.debug(
+                f"Iter {iter}: Rendered image shape: {img_render_batch.shape}")
+
             # --- Apply JPEG compression simulation if beyond warm-up stage ---
             if iter < args.jpeg_iter:
                 processed_image_render_batch = self.image_processor_torch.apply(
                     img_render_batch, skip_jpeg_compression=True
                 )
+                self.logger.debug(
+                    f"Iter {iter}: Applied image processing (no JPEG compression)")
             else:
                 processed_image_render_batch = self.image_processor_torch.apply(
                     img_render_batch
                 )
-
-            # --- Prepare variables for loss computation ---
-            similarity_loss_raw = torch.tensor(
-                np.inf, device=device, dtype=dtype)
-            similarity_loss = torch.tensor(0.0, device=device, dtype=dtype)
+                self.logger.debug(
+                    f"Iter {iter}: Applied image processing (with JPEG compression)")
 
             # --- Prepare target image batch and augment with random crop/resize ---
             tensor_image_batch = tensor_image.repeat(batch_size, 1, 1, 1)
             tensor_image_cropped_batch = (
                 self.image_processor_torch_ref.apply_random_crop_resize(
-                    tensor_image_batch)
+                    tensor_image_batch, crop_percent=FORWARD_CROP_PERCENT)
             )
 
             mse_loss = (
@@ -319,8 +349,16 @@ class DiffVGOptimizer(IOptimizer):
                 .mean()
             )
 
+            self.logger.debug(f"Iter {iter}: MSE loss: {mse_loss.item():.6f}")
+
+            # --- Prepare variables for loss computation ---
+            similarity_loss_raw = torch.tensor(
+                np.inf, device=device, dtype=dtype)
+            similarity_loss = torch.tensor(0.0, device=device, dtype=dtype)
+
             # --- Compute similarity loss using SIGLIP model ---
-            if similarity_mode == "siglip":
+            if args.similarity_mode == "siglip":
+                self.logger.debug(f"Iter {iter}: Computing SIGLIP similarity")
                 try:
                     # (B, C, H, W), [0,1] -> (B, C, H, W), [-1, 1]
                     # The SIGLIP processor performs normalization internally, so you can either pass [0,1] or manually match the model's expected input.
@@ -344,13 +382,16 @@ class DiffVGOptimizer(IOptimizer):
                     )  # (B, embed_dim)
 
                     cosine_similarity_batch = torch.nn.functional.cosine_similarity(
-                        self.target_image_emdedding, rendered_image_embedding_batch, dim=-1
+                        self.target_image_embedding, rendered_image_embedding_batch, dim=-1
                     )  # (B,)
                     similarity_loss_raw = (
                         -cosine_similarity_batch.mean()
                     )  # Negative sign for loss
                     # Normalization may not be necessary for SIGLIP, needs further consideration
                     similarity_loss = similarity_loss_raw
+
+                    self.logger.debug(
+                        f"Iter {iter}: SIGLIP similarity loss: {similarity_loss.item():.6f}")
 
                 except Exception as e:
                     self.logger.error(
@@ -359,6 +400,7 @@ class DiffVGOptimizer(IOptimizer):
                     break
 
             # --- Compute aesthetic score and loss ---
+            self.logger.debug(f"Iter {iter}: Computing aesthetic score")
             try:
                 # Pass processed_img_render_batch to the aesthetic_evaluator_torch
                 # The resolution can be different from PaliGemma (AestheticEvaluatorTorch handles resizing internally)
@@ -368,6 +410,8 @@ class DiffVGOptimizer(IOptimizer):
                         device, dtype=torch.float16)
                 )  # (B,)
                 aesthetic_loss = -aesthetic_score_batch.mean()
+                self.logger.debug(
+                    f"Iter {iter}: Aesthetic loss: {aesthetic_loss.item():.6f}")
             except Exception as e:
                 self.logger.error(
                     f"Failed to compute aesthetic score (iter {iter}): {e}"
@@ -376,16 +420,22 @@ class DiffVGOptimizer(IOptimizer):
 
             # --- Total loss: depends on current iteration ---
             if iter >= args.aesthetic_iter:
-                if similarity_mode == "siglip":
+                if args.similarity_mode == "siglip":
                     loss = (
                         args.w_aesthetic * aesthetic_loss
                         + args.w_siglip * similarity_loss
                         + args.w_mse * mse_loss
                     )
+                    self.logger.debug(
+                        f"Iter {iter}: Total loss (aesthetic+siglip+mse): {loss.item():.6f}")
                 else:  # Should not happen
                     loss = args.w_aesthetic * aesthetic_loss + args.w_mse * mse_loss
+                    self.logger.debug(
+                        f"Iter {iter}: Total loss (aesthetic+mse): {loss.item():.6f}")
             else:  # During aesthetic_iter, use only aesthetic loss
                 loss = args.w_aesthetic * aesthetic_loss
+                self.logger.debug(
+                    f"Iter {iter}: Total loss (aesthetic only): {loss.item():.6f}")
 
             # --- Abort if loss becomes NaN ---
             if torch.isnan(loss):
@@ -395,6 +445,7 @@ class DiffVGOptimizer(IOptimizer):
                 break
 
             # --- Backpropagation and custom gradient filtering ---
+            self.logger.debug(f"Iter {iter}: Starting backpropagation")
             try:
                 loss.backward()
                 with torch.no_grad():
@@ -421,6 +472,8 @@ class DiffVGOptimizer(IOptimizer):
                 break
 
             # --- Gradient clipping and optimizer step ---
+            self.logger.debug(
+                f"Iter {iter}: Applying gradient clipping and optimizer step")
             torch.nn.utils.clip_grad_norm_(
                 [
                     p
@@ -433,6 +486,7 @@ class DiffVGOptimizer(IOptimizer):
             self.optimizer.step()
 
             # --- Post-update clamping to keep parameters within bounds ---
+            self.logger.debug(f"Iter {iter}: Applying parameter clamping")
             with torch.no_grad():
                 for group in self.shape_groups:
                     if (
@@ -467,6 +521,8 @@ class DiffVGOptimizer(IOptimizer):
             if iter >= args.aesthetic_iter and current_loss < best_loss:
                 best_loss = current_loss
                 best_iteration = iter
+                self.logger.debug(
+                    f"Iter {iter}: New best loss: {best_loss:.6f}")
 
             # Logging
             if (iter + 1) % args.log_interval == 0 or iter == 0:
@@ -486,8 +542,8 @@ class DiffVGOptimizer(IOptimizer):
                     f"Iter [{(iter + 1):>4}/{args.iterations}], "
                     f"LRs: {lr_str}, "
                     f"AesScore(T Avg): {current_aesthetic_score_torch_avg:.6f}, "
-                    f"{similarity_mode.upper()}Loss(Raw Avg): {current_similarity_loss_raw_avg:.6f}, "
-                    f"{similarity_mode.upper()}Loss(Norm/Direct Avg): {current_similarity_loss_avg:.6f}, "
+                    f"{args.similarity_mode.upper()}Loss(Raw Avg): {current_similarity_loss_raw_avg:.6f}, "
+                    f"{args.similarity_mode.upper()}Loss(Norm/Direct Avg): {current_similarity_loss_avg:.6f}, "
                     f"Loss(A/Sim/Mse/T Avg): {aesthetic_loss.item():.4f}/{similarity_loss.item():.4f}/{mse_loss.item():.4f}/{loss.item():.6f}, "
                     f"Best Loss: {best_loss:.6f} (iter {best_iteration}), "
                     f"Time: {elapsed_time:.2f}s"
@@ -496,12 +552,23 @@ class DiffVGOptimizer(IOptimizer):
         self.logger.success(
             f"Optimization completed! Best Loss: {best_loss:.6f} at iteration {best_iteration}"
         )
-        return self.shapes, self.shape_groups, -aesthetic_loss.item()
+        self.logger.debug("Final optimization statistics:")
+        self.logger.debug(f"  - Total iterations: {args.iterations}")
+        self.logger.debug(f"  - Best iteration: {best_iteration}")
+        self.logger.debug(f"  - Best loss: {best_loss:.6f}")
+        self.logger.debug(
+            f"  - Final aesthetic score: {-aesthetic_loss.item() if isinstance(aesthetic_loss, torch.Tensor) else 0.0:.6f}")
+
+        # Return the final aesthetic loss, or 0.0 if optimization was interrupted
+        final_aesthetic_score = -aesthetic_loss.item() if isinstance(aesthetic_loss,
+                                                                     torch.Tensor) else 0.0
+        return self.shapes, self.shape_groups, final_aesthetic_score
 
     def _load_aesthetic_evaluator(self) -> AestheticEvaluatorTorch:
         self.logger.debug("Loading Aesthetic Evaluator ...")
         try:
-            aesthetic_evaluator_torch = AestheticEvaluatorTorch()
+            aesthetic_evaluator_torch = AestheticEvaluatorTorch(
+                model_path=AESTHETIC_MODEL_PATH, clip_model_path=CLIP_MODEL_PATH, device=torch.device("cuda:0"))
             self.logger.success("AestheticEvaluatorTorch initialized.")
             return aesthetic_evaluator_torch
         except Exception as e:
@@ -548,19 +615,15 @@ class DiffVGOptimizer(IOptimizer):
         if similarity_mode == "siglip":
             self.siglip_model = self._load_siglip_model()
 
-    def _save_optimized_svg(self, output_path: str = None) -> str:
+    def _save_optimized_svg(self) -> str:
         """Save the optimized SVG to a results folder"""
         try:
             # Create results directory if it doesn't exist
-            results_dir = os.path.join(DATA_DIR, "results")
-            results_dir.mkdir(exist_ok=True)
+            results_dir = Path(DATA_DIR) / "results"
+            results_dir.mkdir(parents=True, exist_ok=True)
 
-            # Generate filename with timestamp if not provided
-            if output_path is None:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_path = results_dir / f"optimized_svg_{timestamp}.svg"
-            else:
-                output_path = results_dir / output_path
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = results_dir / f"optimized_svg_{timestamp}.svg"
 
             # Save the optimized SVG
             pydiffvg.save_svg(
@@ -578,7 +641,48 @@ class DiffVGOptimizer(IOptimizer):
             self.logger.error(f"Failed to save optimized SVG: {e}")
             return None
 
-    def process(self, svg: str, image: Image.Image, args, output_filename: str = None):
+    def _shapes_to_svg_string(self) -> str:
+        """Convert optimized shapes to SVG string without saving to file"""
+        try:
+            # Create a temporary file to get SVG content
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.svg', delete=False) as temp_file:
+                pydiffvg.save_svg(
+                    temp_file.name,
+                    self.canvas_width,
+                    self.canvas_height,
+                    self.shapes,
+                    self.shape_groups
+                )
+                temp_file_path = temp_file.name
+
+            # Read the SVG content
+            with open(temp_file_path, 'r', encoding='utf-8') as f:
+                svg_content = f.read()
+
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+
+            return svg_content
+
+        except Exception as e:
+            self.logger.error(f"Failed to convert shapes to SVG string: {e}")
+            return None
+
+    def process(self, svg: str, image: Image.Image, args, limit):
+        """
+        Process and optimize an SVG using the target image.
+
+        Args:
+            svg (str): Input SVG content as string
+            image (Image.Image): Target PIL image for optimization
+            args: Optimization arguments/configuration
+
+        Returns:
+            tuple: (optimized_svg_content, aesthetic_score) if successful, (None, None) if failed
+                - optimized_svg_content (str): Optimized SVG content as string
+                - aesthetic_score (float): Final aesthetic score
+        """
+        self.image = image
         # Convert svg to svg_file_path
         tmp_dir = tempfile.TemporaryDirectory()
         tmp_file_path = os.path.join(tmp_dir.name, "tmp.svg")
@@ -588,6 +692,7 @@ class DiffVGOptimizer(IOptimizer):
 
         # Prepare params to optimization
         result = self._load_svg_and_prepare_params(Path(tmp_file_path))
+
         if result is None:
             self.logger.error("Failed to load SVG and prepare parameters")
             return
@@ -601,8 +706,9 @@ class DiffVGOptimizer(IOptimizer):
         ) = result
 
         # Compute target image embeddding
-        self.target_image_emdedding = self._calculate_target_image_embedding_with_siglip(
-            image, self.siglip_model, device=self.device, dtype=torch.float16)
+        if args.similarity_mode:
+            self.target_image_embedding = self._calculate_target_image_embedding_with_siglip(
+                image, self.siglip_model, device=self.device, dtype=torch.float16)
 
         # Set up optimizer
         optimizer_result = self._setup_optimizer(args, params)
@@ -615,24 +721,58 @@ class DiffVGOptimizer(IOptimizer):
 
         self.logger.info("Starting optimization process...")
         try:
-            optimization_result = self.run(
-                args, similarity_mode="siglip", device=self.device, dtype=torch.float16)
+            # Execute the main optimization process with given arguments
+            self.run(args=args)
 
-            # Save the optimized SVG after successful optimization
-            if optimization_result is not None:
-                saved_path = self._save_optimized_svg(output_filename)
-                if saved_path:
-                    self.logger.info(
-                        f"Optimization completed and SVG saved to: {saved_path}")
-                    return optimization_result, saved_path
-                else:
-                    return optimization_result, None
+            # Convert the optimized shapes and shape_groups to SVG string format
+            # This method creates a temporary file, saves the SVG, reads content, and cleans up
+            optimized_svg_content = self._shapes_to_svg_string()
+
+            # Check if SVG content generation was successful
+            if optimized_svg_content:
+                # Save the optimized SVG to a timestamped file in results directory
+                # This is optional but useful for debugging and result archival
+                self._save_optimized_svg()
+
+                # Log successful completion
+                self.logger.success("Optimization completed successfully")
+
+                # Return the optimized SVG content as string
+                return optimize_svg_size(optimized_svg_content, limit=limit)
             else:
-                self.logger.warning("Optimization returned None")
+                # Log error if SVG content generation failed
+                self.logger.error("Failed to generate optimized SVG content")
+
+                # Return tuple indicating failure (consistent with method signature)
                 return None, None
 
         except Exception as e:
+            # Log any unexpected errors during optimization process
             self.logger.error(f"Optimization failed: {e}")
+
+            # Return tuple indicating failure due to exception
             return None, None
 
-    
+
+if __name__ == "__main__":
+    import logging
+
+    from src._config import OptimizationArgs
+    from src.utils import create_console_logger
+
+    args = OptimizationArgs
+    pydiffvg.set_device(torch.device("cuda:0"))
+
+    logger = create_console_logger("Optimizer", logging.INFO)
+
+    optimizer = DiffVGOptimizer(logger=logger)
+    optimizer.build(args.similarity_mode)
+
+    image = Image.open("/home/anhndt/pysvgenius/best_image.png")
+    with open("/home/anhndt/pysvgenius/best_original.svg", "r") as f:
+        svg = f.read()
+
+    results = optimizer.process(
+        svg, image, args=args, limit=10000)
+
+    print(len(results.encode()))

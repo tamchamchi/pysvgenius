@@ -26,24 +26,23 @@ class AestheticPredictor(nn.Module):
 
 
 class AestheticEvaluatorTorch:
-    def __init__(self):
-        self.model_path = r"/home/anhndt/pysvgenius/models/sac+logos+ava1-l14-linearMSE.pth"
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu")
+    def __init__(self, model_path, clip_model_path, device):
+        self.model_path = model_path
+        self.clip_model_path = clip_model_path
+        self.device = device
         self.predictor, self.clip_model, self.preprocessor = self.load()
 
     def load(self):
+        """Loads the aesthetic predictor model and CLIP model."""
         state_dict = torch.load(
             self.model_path, weights_only=True, map_location=self.device)
 
+        # CLIP embedding dim is 768 for CLIP ViT L 14
         predictor = AestheticPredictor(768).half()
         predictor.load_state_dict(state_dict)
         predictor.to(self.device)
         predictor.eval()
-
-        clip_model, _ = clip.load(
-            "ViT-L/14", device=self.device)
-        # reference: CLIP/clip/clip.py
+        clip_model, _ = clip.load(self.clip_model_path, device=self.device)
         preprocessor = transforms.Compose(
             [
                 transforms.Resize(
@@ -54,20 +53,21 @@ class AestheticEvaluatorTorch:
                     (0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
             ]
         )
+
         return predictor, clip_model, preprocessor
 
-    def score(self, image: torch.Tensor, no_grad: bool = True):
+    def score(self, image: torch.Tensor, no_grad: bool = False) -> float:
+        """Predicts the CLIP aesthetic score of an image."""
         if image.ndim != 4:
-            # image must be NCHW
             raise ValueError(
                 f"image must be 4 channels (shape: {image.shape})")
 
         with torch.no_grad() if no_grad else contextlib.nullcontext():
             image = self.preprocessor(image)
             image_features = self.clip_model.encode_image(image)
-
-            image_features /= image_features.norm(dim=-1, keepdim=True)
+            # l2 normalize
+            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
 
             score_tensor = self.predictor(image_features)
 
-        return score_tensor / 10
+        return score_tensor / 10.0  # scale to [0, 1]
