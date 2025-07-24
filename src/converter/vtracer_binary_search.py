@@ -12,8 +12,8 @@ from .base import IConverter
 from src.common.registry import registry
 
 
-@registry.register_converter("vtracer-v1")
-class VtracerConverter(IConverter):
+@registry.register_converter("vtracer-binary-search")
+class VtracerBinarySearch(IConverter):
     def __init__(self):
         super().__init__()
 

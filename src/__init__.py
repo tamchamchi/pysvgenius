@@ -1,9 +1,7 @@
-from src.generator import SDXLTurboGenerator, SDv2Generator
-from src.converter import VtracerConverter, VtracerConverterV2
+from src.generator import load_generator
+from src.converter import load_converter
 
 __all__ = [
-    "SDXLTurboGenerator",
-    "SDv2Generator",
-    "VtracerConverter",
-    "VtracerConverterV2"
+    "load_generator",
+    "load_converter"
 ]

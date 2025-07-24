@@ -1,21 +1,10 @@
-from src.common.registry import registry
-from src.common.config import Config
-from types import SimpleNamespace
+from src import load_converter, load_generator
+generator = load_generator("sdxl-turbo")
+converter = load_converter("vtracer-grib-search")
 
-generator_cls = registry.get_generator_class("sdxl-turbo")
+images = generator("a cartoon cat", num_images=4)
+svgs = converter(images, limit=20000)
 
-
-args = SimpleNamespace(
-    cfg_path="/home/anhndt/pysvgenius/configs/configs.yaml",
-    options=["generator.sdxl-turbo.num_images=4", "generator.sdxl-turbo.height=512"]
-)
-
-config = Config(args=args)
-cfg_dict = config.to_dict()
-
-# generator_cfg = cfg_dict["generator"]['sdxl-turbo']
-# generator = generator_cls.from_config(generator_cfg)
-# images = generator("big dog",num_images = generator_cfg["num_images"])
-# print(len(images))
-
-print(config.generator_cfg)
+for i, svg in enumerate(svgs):
+    with open(f"{i}.svg", "w") as f:
+        f.write(svg)
