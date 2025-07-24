@@ -8,16 +8,12 @@ generator implementations.
 """
 
 from .base import IGenerator
-from .factory import GeneratorFactory
 from .sdxl_turbo_generator import SDXLTurboGenerator
+from .stable_diffusion_v2_generator import SDv2Generator
 
-# Auto-register available generators
-GeneratorFactory.register("sdxl-turbo", SDXLTurboGenerator)
-GeneratorFactory.register(
-    "sdxl_turbo", SDXLTurboGenerator)  # Alternative name
 
 __all__ = [
     "IGenerator",
-    "GeneratorFactory",
-    "SDXLTurboGenerator"
+    "SDXLTurboGenerator",
+    "SDv2Generator",
 ]

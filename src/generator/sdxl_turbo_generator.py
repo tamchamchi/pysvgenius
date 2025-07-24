@@ -8,8 +8,10 @@ from PIL import Image
 from src.utils.logger import get_library_logger
 from typing import Optional
 import logging
+from src.common.registry import registry
 
 
+@registry.register_generator("sdxl-turbo")
 class SDXLTurboGenerator(IGenerator):
     """
     A text-to-image generator implementation using Stability AI's SDXL-Turbo model
@@ -29,7 +31,7 @@ class SDXLTurboGenerator(IGenerator):
         model_path: str = "stabilityai/sdxl-turbo",
         device: str = "cuda",
         seed: int = 42,
-        logger: Optional[logging.Logger] = None
+        lora_path: Optional[str] = None,
     ):
         """
         Initialize the SDXLTurboGenerator with model path, device, seed, and LoRA path.
@@ -40,18 +42,13 @@ class SDXLTurboGenerator(IGenerator):
             seed (int): Random seed for reproducibility.
             lora_path (Optional[str]): Optional path to a LoRA adapter.
         """
-        if logger is not None:
-            self.logger = logger
-        else:
-            self.logger = get_library_logger(
-                f"{__name__}.{self.__class__.__name__}")
         self.model_path = model_path
+        self.lora_path = lora_path
         self.device = device
         self.seed = seed
 
         # Load diffusion pipeline into memory
         self.pipe = self._load_pipeline()
-        self.logger.success("SDXLTurboGenerator initialization completed")
 
     def _load_pipeline(self):
         """
@@ -63,9 +60,6 @@ class SDXLTurboGenerator(IGenerator):
         Raises:
             ValueError: If loading the pipeline fails.
         """
-        self.logger.info(
-            f"Loading SDXL-Turbo pipeline from: {self.model_path}")
-        self.logger.debug(f"Target device: {self.device}")
 
         try:
             # Load model using FP16 precision for faster inference
@@ -73,51 +67,17 @@ class SDXLTurboGenerator(IGenerator):
                 self.model_path, torch_dtype=torch.float16, variant="fp16"
             ).to(self.device)
 
-            self.logger.success(
-                f"Successfully loaded SDXL-Turbo pipeline on {self.device}")
+            # Load LoRA if provided
+            if self.lora_path:
+                try:
+                    pipe.load_lora_weights(self.lora_path)
+                except Exception as e:
+                    raise ValueError(
+                        f"Failed to load LoRA weights: {e}") from e
+
             return pipe
         except Exception as e:
-            self.logger.error(f"Failed to load pipeline: {e}")
             raise ValueError(f"Failed to load pipeline: {e}") from e
-
-    def set_params(self, **kwargs):
-        """
-        Update generator attributes such as seed, device, model_path, etc.
-
-        Args:
-            kwargs: Dictionary of parameter names and values.
-
-        Raises:
-            AttributeError: If a given parameter is not valid.
-        """
-        self.logger.debug(f"Updating parameters: {kwargs}")
-
-        for key, val in kwargs.items():
-            if hasattr(self, key):
-                old_val = getattr(self, key)
-                setattr(self, key, val)
-                self.logger.debug(f"Updated {key}: {old_val} -> {val}")
-            else:
-                self.logger.error(
-                    f"Invalid parameter '{key}' for {self.__class__.__name__}")
-                raise AttributeError(
-                    f"Parameter '{key}' is not valid for {self.__class__.__name__}"
-                )
-
-        self.logger.info("Parameters updated successfully")
-
-    def get_params(self) -> dict:
-        """
-        Get current configuration parameters of the generator.
-
-        Returns:
-            dict: Dictionary containing model_path, device, seed, and lora_path.
-        """
-        return {
-            "model_path": self.model_path,
-            "device": self.device,
-            "seed": self.seed,
-        }
 
     def process(
         self,
@@ -149,20 +109,13 @@ class SDXLTurboGenerator(IGenerator):
         Raises:
             RuntimeError: If generation fails.
         """
-        self.logger.info(
-            f"Starting image generation with prompt: '{prompt[:50]}{'...' if len(prompt) > 50 else ''}'")
-        self.logger.debug(f"Generation parameters: num_images={num_images}, steps={num_inference_steps}, "
-                          f"guidance_scale={guidance_scale}, size={width}x{height}")
-
         try:
             # Create a deterministic torch.Generator with fixed seed
             generator = torch.Generator(self.device)
             if self.seed is not None:
                 generator.manual_seed(self.seed)
-                self.logger.debug(f"Using seed: {self.seed}")
 
             # Run the text-to-image pipeline
-            self.logger.debug("Running SDXL-Turbo inference...")
             outputs = self.pipe(
                 prompt=prompt,
                 num_images_per_prompt=num_images,
@@ -176,18 +129,23 @@ class SDXLTurboGenerator(IGenerator):
             )
 
             # Return list of generated PIL.Image objects
-            self.logger.success(
-                f"Successfully generated {len(outputs.images)} images")
             return outputs.images
 
         except Exception as e:
-            self.logger.error(f"Error in process(): {e}")
             raise RuntimeError(f"Error in process(): {e}") from e
+
+    @classmethod
+    def from_config(cls, cfg=None):
+        model_path = cfg.get("model_path", "stabilityai/sdxl-turbo")
+        device = cfg.get("device", "cpu")
+        seed = cfg.get("seed", 42)
+        lora_path = cfg.get("lora", None)
+        return cls(model_path=model_path, device=device, seed=seed, lora_path=lora_path)
 
 
 if __name__ == "__main__":
     # Example usage
     generator = SDXLTurboGenerator()
     images = generator.process("a big dog running in the field")
-    images = generator("a pick dog", num_images=3)
+    # images = generator("a pick dog", num_images=3)
     print(f"Generated {len(images)} image(s)")
