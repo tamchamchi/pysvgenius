@@ -1,7 +1,7 @@
 class Registry:
     mapping = {
         "generator": {},
-        "convertor": {},
+        "converter": {},
         "ranker": {},
         "optimizer": {},
         "state": {},
@@ -23,7 +23,7 @@ class Registry:
             from src.generator.base import IGenerator
 
             assert issubclass(gen_cls, IGenerator), (
-                "All generators must inherit IGenerator class"
+                "All generators must inherit 'IGenerator' class"
             )
 
             if name in cls.mapping["generator"]:
@@ -36,7 +36,25 @@ class Registry:
             return gen_cls
 
         return wrap
-    
+
+    def register_converter(cls, name):
+        def wrap(converter_cls):
+            from src.converter.base import IConverter
+
+            assert issubclass(converter_cls, IConverter), (
+                "All converters must inherit 'IConverter' class"
+            )
+
+            if name in cls.mapping["converter"]:
+                raise KeyError(
+                    "Name '{}' already registered for {}.".format(
+                        name, cls.mapping["converter"][name]
+                    )
+                )
+            cls.mapping["converter"][name] = converter_cls
+            return converter_cls
+
+        return wrap
 
     @classmethod
     def register_path(cls, name, path):
@@ -85,8 +103,20 @@ class Registry:
         return sorted(cls.mapping["generator"].keys())
 
     @classmethod
+    def get_converter_class(cls, name):
+        return cls.mapping["converter"].get(name, None)
+
+    @classmethod
+    def list_converter(cls):
+        return sorted(cls.mapping["converter"].keys())
+
+    @classmethod
     def get_path(cls, name):
         return cls.mapping["paths"].get(name, None)
+
+    @classmethod
+    def list_path(cls):
+        return sorted(cls.mapping["paths"].keys())
 
     @classmethod
     def get(cls, name, default=None, no_warning=False):

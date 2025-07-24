@@ -45,7 +45,19 @@ coverage.xml
 data/
 
 # === Model ===
-models/
+# models/
+*.pth
+*.pt
+*.bin
+*.safetensors
+*.ckpt
 
 # === Test ===
 /_test.py
+
+# === Config ===
+!config/
+!config/**/*.yaml
+!config/**/*.yml
+!config/**/*.json
+
