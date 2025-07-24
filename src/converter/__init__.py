@@ -8,15 +8,11 @@ converter implementations.
 """
 
 from .base import IConverter
-from .factory import ConverterFactory
 from .vtracer import VtracerConverter
-
-# Auto-register available converters
-ConverterFactory.register("vtracer", VtracerConverter)
-ConverterFactory.register("vt", VtracerConverter)  # Short name
+from .vtracer_v2 import VtracerConverterV2
 
 __all__ = [
     "IConverter",
-    "ConverterFactory",
-    "VtracerConverter"
+    "VtracerConverter",
+    "VtracerConverterV2"
 ]

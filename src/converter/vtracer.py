@@ -4,39 +4,23 @@ import re
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
-from typing import Optional
 
 import vtracer
 from PIL import Image
 
-from src.utils import create_console_logger, get_library_logger, svg_to_png
-
 from .base import IConverter
 
+from src.common.registry import registry
 
+
+@registry.register_converter("vtracer-v1")
 class VtracerConverter(IConverter):
-    def __init__(self, logger: Optional[logging.Logger] = None):
-        """
-        Initialize VtracerConverter.
-
-        Parameters
-        ----------
-        logger : Optional[logging.Logger]
-            Logger instance to use. If None, a default logger will be created.
-        """
-        if logger is not None:
-            self.logger = logger
-        else:
-            # Sử dụng library logger (silent by default)
-            self.logger = get_library_logger(
-                f"{__name__}.{self.__class__.__name__}")
-
-        self.logger.debug("VtracerConverter initialized")
+    def __init__(self):
+        super().__init__()
 
     def _convert_svg_with_vtracer(
         self, img: Image.Image, image_size: tuple[int, int] = (256, 256)
     ) -> str:
-        self.logger.debug(f"Converting image to SVG with size: {image_size}")
         tmp_dir = tempfile.TemporaryDirectory()
 
         resized_image = img.resize(image_size)
@@ -46,8 +30,6 @@ class VtracerConverter(IConverter):
 
         svg_path = os.path.join(tmp_dir.name, "converted_svg.svg")
 
-        self.logger.debug(
-            f"Using vtracer to convert {tmp_file_path} to {svg_path}")
         vtracer.convert_image_to_svg_py(
             image_path=tmp_file_path,
             out_path=svg_path,
@@ -217,7 +199,7 @@ class VtracerConverter(IConverter):
         path_list = [p for p in path_list if p is not None]
 
         width, height = self._extract_svg_size_with_regex(svg)
-        header = f'<svg width="384" height="384" viewBox="0 0 {width} {height}">'
+        header = f'<svg xmlns="http://www.w3.org/2000/svg" width="384" height="384" viewBox="0 0 {width} {height}">'
         fill_background = re.search(r'fill="([^"]+)"', path_list[0])
         header += f'<rect width="{width}" height="{height}" fill="{fill_background.group(1)}"/>'
 
@@ -252,8 +234,6 @@ class VtracerConverter(IConverter):
         ValueError
             If no image size within `size_range` can satisfy the length limit.
         """
-        self.logger.info(
-            f"Converting image to SVG with size range: {size_range}, limit: {limit}")
         lo, hi = size_range
         best_svg = None
 
@@ -266,69 +246,40 @@ class VtracerConverter(IConverter):
             svg = self._svg_compress(svg)
             length = len(svg)
 
-            self.logger.debug(
-                f"Binary search: size={mid}, svg_length={length}, limit={limit}")
-
             if length <= limit:
                 # This size is valid → Try larger sizes
                 best_svg = svg
                 lo = mid + 1
-                self.logger.debug(f"Size {mid} is valid, trying larger sizes")
             else:
                 # SVG too large → Try smaller sizes
                 hi = mid - 1
-                self.logger.debug(
-                    f"Size {mid} too large, trying smaller sizes")
 
         # Final check: if we still don't have a valid SVG, try the minimum size
         if best_svg is None:
-            self.logger.warning(
-                f"No size found within range {size_range}, trying minimum size")
             svg = self._convert_svg_with_vtracer(image, (lo, lo))
             svg = self._svg_compress(svg)
             if len(svg) <= limit:
                 best_svg = svg
-                self.logger.info(f"Found valid SVG at minimum size {lo}")
             else:
-                self.logger.error(
-                    f"Even minimum size {lo} produces SVG too large ({len(svg)} > {limit})")
                 # Return a minimal SVG as fallback
                 best_svg = f'<svg width="{lo}" height="{lo}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="gray"/></svg>'
-                self.logger.warning("Returning fallback SVG")
 
         return best_svg
 
     def convert_all(self, images: list[Image.Image], max_workers=4, limit=10000) -> list[str]:
-        self.logger.info(
-            f"Converting {len(images)} images with {max_workers} workers, limit={limit}")
         svgs = []
         convert_func = partial(self.vtracer_png_to_svg, limit=limit)
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             for i, svg in enumerate(executor.map(convert_func, images), 1):
                 svgs.append(svg)
-                # Log progress every 10 images or at the end
-                if i % 10 == 0 or i == len(images):
-                    self.logger.info(f"Converted {i}/{len(images)} images")
-        self.logger.info(f"Successfully converted {len(svgs)} images to SVG")
+
+        if len(svgs) == 1:
+            return svgs[0]
+
         return svgs
 
-    def process(self, images: list[Image.Image], limit=10000) -> list[str]:
-        self.logger.info(f"Processing {len(images)} images with limit={limit}")
+    def process(self, images: Image.Image | list[Image.Image], limit=10000) -> list[str]:
+        if isinstance(images, Image.Image):
+            images = [images]
         svgs = self.convert_all(images=images, max_workers=4, limit=limit)
         return svgs
-
-
-if __name__ == "__main__":
-    convertor = VtracerConverter()
-
-    console_logger = create_console_logger("VtracerExample", logging.INFO)
-    convertor_with_logger = VtracerConverter(logger=console_logger)
-
-    image = Image.open(
-        "/home/anhndt/pysvgenius/image.png")
-    # svg = convertor.process([image], limit=20000)
-    svg = convertor_with_logger([image]*20, limit=20000)
-    converted_image = svg_to_png(svg[0])
-    converted_image.save("image.png")
-    with open("test_svg.svg", 'w') as f:
-        f.write(svg[0])
