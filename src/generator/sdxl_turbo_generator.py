@@ -5,9 +5,7 @@ from .base import IGenerator
 from diffusers import AutoPipelineForText2Image
 from PIL import Image
 
-from src.utils.logger import get_library_logger
 from typing import Optional
-import logging
 from src.common.registry import registry
 
 

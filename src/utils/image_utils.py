@@ -229,6 +229,36 @@ def svg_to_png(svg_code: str, size: tuple = (384, 384)) -> Image.Image:
     return Image.open(io.BytesIO(png_data)).convert("RGB").resize(size)
 
 
+def compare_pil_images(img1: Image.Image, img2: Image.Image, size=(384, 384)):
+    """
+    Compare two PIL images after resizing to a fixed size using SSIM metric.
+
+    Parameters:
+        img1 (PIL.Image.Image): The first image to compare.
+        img2 (PIL.Image.Image): The second image to compare.
+        size (tuple): Target resize dimensions (default: 384x384).
+
+    Returns:
+        float: SSIM score between the two images (higher is more similar)
+    """
+    # Resize both images to the same dimensions using high-quality LANCZOS resampling
+    # and convert to grayscale for consistent comparison
+    img1_gray = img1.resize(size, Image.Resampling.LANCZOS).convert('L')
+    img2_gray = img2.resize(size, Image.Resampling.LANCZOS).convert('L')
+
+    # Convert PIL Images to numpy arrays for numerical processing
+    arr1 = np.array(img1_gray)
+    arr2 = np.array(img2_gray)
+
+    # Calculate Structural Similarity Index (SSIM) between the two arrays
+    # SSIM considers luminance, contrast, and structure for perceptual similarity
+    # Returns score (0-1, where 1 means identical) and full comparison map
+    score_ssim, _ = ssim(arr1, arr2, full=True)
+
+    # Return only the SSIM score (ignore the full comparison map)
+    return score_ssim
+
+
 def prepare_image_for_ranking(svgs: list[str]) -> tuple[list[Image.Image], list[int]]:
     """
     Convert a list of SVG strings to preprocessed PIL Images ready for ranking.

@@ -215,7 +215,7 @@ def optimize_svg_size(svg, resize=384, limit=10000):
     """
     canvas_width = resize
     canvas_height = resize
-    header = f'<svg width="384" height="384" viewBox="0 0 {canvas_width} {canvas_height}">'
+    header = f'<svg xmlns="http://www.w3.org/2000/svg" width="384" height="384" viewBox="0 0 {canvas_width} {canvas_height}">'
     # footer = f'<g fill="none" transform="scale({round(canvas_width/256,2)} {round(canvas_height/256,2)})" stroke-linecap="round" stroke-linejoin="round"><path d="M167 200h20l-20 30h20" stroke="#fff" stroke-width="4"/><path d="M167 200h20l-20 30h20" stroke="#EDCE6A" stroke-width="2"/></g></svg>'
     footer = "</svg>"
     # Ignore text layers (last 2 elements)
