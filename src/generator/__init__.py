@@ -15,12 +15,12 @@ Key components:
 from src.common.registry import registry
 from .base import IGenerator
 from .sdxl_turbo_generator import SDXLTurboGenerator
-from .stable_diffusion_v2_generator import SDv2Generator
+# from .stable_diffusion_v2_generator import SDv2Generator
 
 __all__ = [
     "IGenerator",
     "SDXLTurboGenerator",
-    "SDv2Generator",
+    # "SDv2Generator",
 ]
 
 
