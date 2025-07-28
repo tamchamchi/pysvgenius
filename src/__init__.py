@@ -5,6 +5,7 @@ from src.common.config import Config
 from src.common.registry import registry
 from src.converter import load_converter
 from src.generator import load_generator
+from src.ranker import load_ranker
 
 # Get the absolute path of the project directory (go up one level from the current file)
 project_dir = Path(__file__).resolve().parents[1]
@@ -23,7 +24,7 @@ registry.register_path("default_config_path", str(config_dir / "configs.yaml"))
 
 
 # Define publicly accessible functions or objects when this module is imported
-__all__ = ["load_generator", "load_converter", "load_config"]
+__all__ = ["load_generator", "load_converter", "load_ranker", "load_config"]
 
 
 def load_config(options=None):

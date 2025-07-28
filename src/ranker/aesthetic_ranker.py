@@ -1,4 +1,6 @@
-
+import os
+import urllib.request
+from pathlib import Path
 import clip
 import torch
 import torch.nn as nn
@@ -10,7 +12,6 @@ from src.utils.image_utils import prepare_image_for_ranking
 from .base import IRanker
 
 
-@registry.register_ranker("aesthetic")
 class AestheticPredictor(nn.Module):
     """
     A feed-forward neural network for predicting the aesthetic score
@@ -37,59 +38,104 @@ class AestheticPredictor(nn.Module):
         return self.layers(x)
 
 
+@registry.register_ranker("aesthetic")
 class AestheticRanker(IRanker):
     """
     Ranks a list of SVG images by converting them to PNG and scoring
     their visual quality using CLIP embeddings and a trained aesthetic predictor.
     """
 
+    # Model URLs for auto-download
+    AESTHETIC_MODEL_URL = "https://github.com/christophschuhmann/improved-aesthetic-predictor/raw/main/sac%2Blogos%2Bava1-l14-linearMSE.pth"
+    AESTHETIC_MODEL_NAME = "sac+logos+ava1-l14-linearMSE.pth"
+
     def __init__(
         self,
         model_path: str = None,
         clip_model_path: str = None,
         device: str = "cuda:0",
+        auto_download: bool = True
     ):
         """
         Initialize AestheticRanker.
 
         Args:
             model_path (str): Path to the trained aesthetic predictor model
-            clip_model_path (str): Path to the CLIP model weights
+            clip_model_path (str): CLIP model name (e.g., "ViT-L/14")
             device (str): Device to run the models on (cuda:0 or cpu)
+            auto_download (bool): Whether to auto-download missing models
         """
-        # Store configuration parameters
-        self.model_path = model_path
-        self.clip_model_path = clip_model_path
+        # Get model directory from registry with fallback
+        try:
+            model_dir = Path(registry.get_path("model_dir"))
+        except (KeyError, AttributeError):
+            model_dir = Path("models")
+            print(f"⚠ Warning: Using default model directory: {model_dir}")
+
+        # Ensure model directory exists
+        if not model_dir.exists():
+            print(f"Creating model directory: {model_dir}")
+            model_dir.mkdir(parents=True, exist_ok=True)
+
+        # Set default paths
+        self.model_path = model_path or str(
+            model_dir / self.AESTHETIC_MODEL_NAME)
+        self.clip_model_path = clip_model_path or "ViT-L/14"  # CLIP model name
         self.device = device
+        self.auto_download = auto_download
+
+        print(f"Aesthetic model path: {self.model_path}")
+        print(f"CLIP model: {self.clip_model_path}")
+
+        # Download aesthetic model if missing and auto_download is enabled
+        if not os.path.exists(self.model_path):
+            if self.auto_download:
+                print(f"⚠ Aesthetic model not found at {self.model_path}")
+                print("🔄 Starting download...")
+                self._download_aesthetic_model()
+            else:
+                print("✗ Aesthetic model not found and auto_download disabled")
+        else:
+            print(f"✓ Aesthetic model found at {self.model_path}")
 
         # Load the aesthetic predictor and CLIP model
         self.predictor, self.clip_model, self.preprocessor = self._load()
 
-    def __call__(
-        self, svgs: list[str], prompt: str = None, batch_size: int = 16, top_k: int = 2
-    ) -> list[int]:
-        """
-        Make AestheticRanker callable like a function.
-        This is a convenience method that delegates to the process() method.
+    def _download_aesthetic_model(self):
+        """Download the aesthetic predictor model if not found locally."""
+        print(f"📥 Downloading aesthetic model from {self.AESTHETIC_MODEL_URL}")
 
-        Args:
-            svgs (list[str]): List of SVG strings to rank
-            prompt (str): Unused in this ranker but included for interface consistency
-            batch_size (int): Number of images to process in each batch. Default is 16
-            top_k (int): Number of top ranked indices to return. Default is 2
+        try:
+            # Create a progress callback for large downloads
+            def progress_callback(block_num, block_size, total_size):
+                downloaded = block_num * block_size
+                if total_size > 0:
+                    percent = min(100, (downloaded * 100) // total_size)
+                    mb_downloaded = downloaded // (1024*1024)
+                    mb_total = total_size // (1024*1024)
+                    print(
+                        f"\r📥 Downloading: {percent}% ({mb_downloaded}/{mb_total} MB)", end='')
 
-        Returns:
-            list[int]: Top k indices sorted by score in descending order
+            # Download with progress
+            urllib.request.urlretrieve(
+                self.AESTHETIC_MODEL_URL,
+                self.model_path,
+                reporthook=progress_callback
+            )
 
-        Example:
-            >>> ranker = AestheticRanker()
-            >>> images = [svg1, svg2, svg3]
-            >>> top_indices = ranker(svgs, batch_size=8, top_k=2)  # Returns top 2 indices
-        """
-        # Delegate to the main processing method
-        return self.process(
-            svgs=svgs, prompt=prompt, batch_size=batch_size, top_k=top_k
-        )
+            # Verify download
+            if os.path.exists(self.model_path):
+                file_size = os.path.getsize(self.model_path) // (1024*1024)
+                print("\n✅ Aesthetic model downloaded successfully")
+                print(f"   File: {self.model_path}")
+                print(f"   Size: {file_size} MB")
+            else:
+                raise FileNotFoundError("Downloaded file not found")
+
+        except Exception as e:
+            print(f"\n✗ Failed to download aesthetic model: {e}")
+            raise RuntimeError(
+                f"Failed to download aesthetic model: {e}") from e
 
     def _load(self):
         """
@@ -102,6 +148,19 @@ class AestheticRanker(IRanker):
                 - preprocessor (Callable): Image preprocessor function
         """
         try:
+            # Check if aesthetic model exists
+            if not os.path.exists(self.model_path):
+                if self.auto_download:
+                    print("🔄 Aesthetic model not found. Attempting download...")
+                    self._download_aesthetic_model()
+                else:
+                    error_msg = (
+                        f"✗ Aesthetic model not found: {self.model_path}\n"
+                        f"💡 Download it manually: wget {self.AESTHETIC_MODEL_URL} -O {self.model_path}"
+                    )
+                    print(error_msg)
+                    raise FileNotFoundError(error_msg)
+
             # Load the trained aesthetic predictor state dictionary
             state_dict = torch.load(self.model_path, map_location=self.device)
 
@@ -111,13 +170,31 @@ class AestheticRanker(IRanker):
             predictor.to(self.device)
             predictor.eval()  # Set to evaluation mode
 
-            # Load CLIP ViT-L/14 model and preprocessor
-            clip_model, preprocessor = clip.load(
-                self.clip_model_path, device=self.device)
+            # Load CLIP model - this will auto-download if not cached
+            try:
+                clip_download_root = None
+                if hasattr(registry, 'get_path'):
+                    try:
+                        clip_download_root = str(
+                            Path(registry.get_path("model_dir")) / "clip")
+                        print(f"✓ CLIP download root: {clip_download_root}")
+                    except:
+                        print("⚠ Could not get clip download root from registry")
+
+                clip_model, preprocessor = clip.load(
+                    self.clip_model_path,
+                    device=self.device,
+                    download_root=clip_download_root
+                )
+
+            except Exception as clip_error:
+                print(f"✗ Failed to load CLIP model: {clip_error}")
+                raise
 
             return predictor, clip_model, preprocessor
 
         except Exception as e:
+            print(f"✗ Failed to load models: {str(e)}")
             raise RuntimeError(f"Failed to load models: {str(e)}") from e
 
     def score(self, images) -> list[float]:
@@ -136,45 +213,78 @@ class AestheticRanker(IRanker):
         # Handle single image case by wrapping in list
         if isinstance(images, Image.Image):
             images = [images]
+            print("🔄 Processing single image")
+        else:
+            print(f"🔄 Processing batch of {len(images)} images")
 
         # Return empty list for empty input
         if not images:
+            print("⚠ No images provided for scoring")
             return []
+
+        print(f"🔄 Preprocessing {len(images)} images for CLIP...")
 
         # Preprocess all images and create batch tensors
         batch_tensors = []
-        for img in images:
-            # Apply CLIP preprocessing and add batch dimension
-            preprocessed = self.preprocessor(img).unsqueeze(0)
-            batch_tensors.append(preprocessed)
+        failed_count = 0
+
+        for i, img in enumerate(images):
+            try:
+                # Apply CLIP preprocessing and add batch dimension
+                preprocessed = self.preprocessor(img).unsqueeze(0)
+                batch_tensors.append(preprocessed)
+            except Exception as e:
+                print(f"⚠ Failed to preprocess image {i}: {e}")
+                failed_count += 1
+
+        if not batch_tensors:
+            print("✗ No images could be preprocessed")
+            return []
+
+        if failed_count > 0:
+            print(f"⚠ {failed_count}/{len(images)} images failed preprocessing")
 
         # Concatenate into a single batch tensor and move to device
+        print(f"🔄 Creating batch tensor and moving to {self.device}...")
         batch = torch.cat(batch_tensors, dim=0).to(self.device)
+        print(f"✓ Batch tensor shape: {batch.shape}")
 
         scores = []
         with torch.no_grad():  # Disable gradient computation for inference
+            print("🔄 Extracting CLIP features...")
             # Extract image features using CLIP encoder
             batch_features = self.clip_model.encode_image(batch)
+            print(f"✓ CLIP features shape: {batch_features.shape}")
+
             # Normalize features to unit vectors
             batch_features /= batch_features.norm(dim=-1, keepdim=True)
+            print("✓ Features normalized")
 
+            print("🔄 Predicting aesthetic scores...")
             # Predict aesthetic scores using the trained predictor
             batch_scores = self.predictor(batch_features.float())
+            print(f"✓ Raw predictor output shape: {batch_scores.shape}")
 
             # Normalize scores from predictor output to [0, 1] range
             normalized_scores = (batch_scores / 10.0).squeeze().cpu().numpy()
+            print(
+                f"✓ Normalized scores shape: {normalized_scores.shape if hasattr(normalized_scores, 'shape') else 'scalar'}")
 
             # Handle single item case (numpy returns scalar for single element)
             if normalized_scores.ndim == 0:
                 scores = [float(normalized_scores)]
+                print(f"✓ Single score: {scores[0]:.4f}")
             else:
                 scores = normalized_scores.tolist()
+                print(
+                    f"✓ Batch scores: {[f'{s:.4f}' for s in scores[:5]]}{'...' if len(scores) > 5 else ''}")
 
+        print(f"✅ Aesthetic scoring complete. Generated {len(scores)} scores")
         return scores
 
     def process(
         self, svgs: list[str], prompt: str = None, batch_size: int = 16, top_k: int = 2
-    ) -> list[int]:
+    ) -> tuple[list[int], list[float]]:
         """
         Ranks a list of SVG strings based on predicted aesthetic score using batch processing.
 
@@ -187,22 +297,36 @@ class AestheticRanker(IRanker):
             top_k (int): Number of top ranked indices to return
 
         Returns:
-            list[int]: Indices sorted by aesthetic score in descending order (best first)
+            tuple[list[int], list[float]]: (sorted_indices, all_scores)
+                - sorted_indices: Indices sorted by aesthetic score in descending order (best first)
+                - all_scores: All computed scores for debugging/analysis
         """
         # Ignore prompt parameter (not used in aesthetic ranking)
-        _ = prompt
+        if prompt:
+            print(
+                f"⚠ Prompt provided but ignored in aesthetic ranking: '{prompt}'")
 
-        # Return empty list if no input provided
+        # Return empty results if no input provided
         if not svgs:
-            return []
+            print("⚠ No SVGs provided, returning empty results")
+            return [], []
 
+        print("🔄 Converting SVGs to PIL Images...")
         # Convert SVG strings to PIL Images for processing
-        images, _ = prepare_image_for_ranking(svgs)
+        images, valid_indices = prepare_image_for_ranking(svgs)
+
+        if not images:
+            print("✗ No valid images after SVG conversion")
+            return [], []
+
+        if len(images) < len(svgs):
+            failed_count = len(svgs) - len(images)
+            print(f"⚠ {failed_count} SVGs failed conversion")
 
         all_scores = []
 
         # Process images in batches to manage memory usage
-        for batch_start in range(0, len(images), batch_size):
+        for batch_idx, batch_start in enumerate(range(0, len(images), batch_size)):
             batch_end = min(batch_start + batch_size, len(images))
             current_batch = images[batch_start:batch_end]
 
@@ -212,24 +336,39 @@ class AestheticRanker(IRanker):
                 all_scores.extend(batch_scores)
 
             except Exception as e:
+                print(f"✗ Failed to process batch {batch_idx + 1}: {e}")
                 # Add zeros for failed batch to maintain index consistency
-                all_scores.extend([0.0] * len(current_batch))
+                zeros_added = len(current_batch)
+                all_scores.extend([0.0] * zeros_added)
+                print(f"⚠ Added {zeros_added} zero scores for failed batch")
 
         # Verify that we have scores for all images
         if len(all_scores) != len(images):
-            return []
+            print(
+                f"✗ Score count mismatch: {len(all_scores)} scores != {len(images)} images")
+            return [], []
 
         # Create (index, score) pairs and sort by score in descending order
         indexed_scores = list(enumerate(all_scores))
         sorted_pairs = sorted(indexed_scores, key=lambda x: x[1], reverse=True)
         sorted_indices = [index for index, score in sorted_pairs]
 
-        # Return top k indices (best aesthetic scores first)
-        return sorted_indices[:top_k], all_scores
+        # Return top k indices and all scores
+        result_indices = sorted_indices[:top_k]
+
+        return result_indices, all_scores
 
     @classmethod
     def from_config(cls, cfg):
-        model_path = cfg.get("model_path")
-        clip_model_path = cfg.get("clip_model_path", "ViT-L/14")
-        device = cfg.get("device")
-        return cls(model_path, clip_model_path, device)
+        """Create AestheticRanker from configuration dictionary."""
+        print(f"🔄 Creating AestheticRanker from config: {cfg}")
+
+        ranker = cls(
+            model_path=cfg.get("model_path"),
+            clip_model_path=cfg.get("clip_model_path"),
+            device=cfg.get("device", "cuda:0"),
+            auto_download=cfg.get("auto_download", True)
+        )
+
+        print("✅ AestheticRanker created from config")
+        return ranker
