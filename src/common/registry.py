@@ -56,6 +56,23 @@ class Registry:
 
         return wrap
 
+    def register_ranker(cls, name):
+        def wrap(ranker_cls):
+            from src.ranker import IRanker
+            assert issubclass(ranker_cls, IRanker), (
+                "All ranker must inherit 'IRanker' class"
+            )
+
+            if name in cls.mapping["ranker"]:
+                raise KeyError(
+                    "Name '{}' already registered for {}.".format(
+                        name, cls.mapping["ranker"][name]
+                    )
+                )
+            cls.mapping["ranker"][name] = ranker_cls
+            return ranker_cls
+        return wrap
+
     @classmethod
     def register_path(cls, name, path):
         r"""Register a path to registry with key 'name'
@@ -109,6 +126,14 @@ class Registry:
     @classmethod
     def list_converter(cls):
         return sorted(cls.mapping["converter"].keys())
+
+    @classmethod
+    def get_ranker_class(cls, name):
+        return cls.mapping["ranker"][name]
+
+    @classmethod
+    def list_ranker(cls):
+        return sorted(cls.mapping["ranker"].keys())
 
     @classmethod
     def get_path(cls, name):
