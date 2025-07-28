@@ -29,6 +29,8 @@ class SDXLTurboGenerator(IGenerator):
         model_path: str = "stabilityai/sdxl-turbo",
         device: str = "cuda",
         seed: int = 42,
+        prefix: str = "",
+        suffix: str = "",
         lora_path: Optional[str] = None,
     ):
         """
@@ -43,10 +45,15 @@ class SDXLTurboGenerator(IGenerator):
         self.model_path = model_path
         self.lora_path = lora_path
         self.device = device
+        self.prefix = prefix
+        self.suffix = suffix
         self.seed = seed
 
         # Load diffusion pipeline into memory
         self.pipe = self._load_pipeline()
+
+    def _build_prompt(self, desc: str) -> str:
+        return f"{self.prefix} {desc} {self.suffix}"
 
     def _load_pipeline(self):
         """
@@ -113,9 +120,11 @@ class SDXLTurboGenerator(IGenerator):
             if self.seed is not None:
                 generator.manual_seed(self.seed)
 
+            processed_prompt = self._build_prompt(prompt)
+
             # Run the text-to-image pipeline
             outputs = self.pipe(
-                prompt=prompt,
+                prompt=processed_prompt,
                 num_images_per_prompt=num_images,
                 negative_prompt=negative_prompt,
                 height=height,
@@ -137,8 +146,10 @@ class SDXLTurboGenerator(IGenerator):
         model_path = cfg.get("model_path", "stabilityai/sdxl-turbo")
         device = cfg.get("device", "cpu")
         seed = cfg.get("seed", 42)
+        prefix = cfg.get("prefix", "")
+        suffix = cfg.get("suffix", "")
         lora_path = cfg.get("lora", None)
-        return cls(model_path=model_path, device=device, seed=seed, lora_path=lora_path)
+        return cls(model_path=model_path, device=device, seed=seed, prefix=prefix, suffix=suffix, lora_path=lora_path)
 
 
 if __name__ == "__main__":

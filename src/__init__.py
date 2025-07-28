@@ -21,6 +21,7 @@ registry.register_path("model_dir", str(model_dir))
 registry.register_path("config_dir", str(config_dir))
 registry.register_path("default_config_path", str(config_dir / "configs.yaml"))
 
+
 # Define publicly accessible functions or objects when this module is imported
 __all__ = ["load_generator", "load_converter", "load_config"]
 
@@ -129,3 +130,6 @@ def load_config(options=None):
     config = Config(args)
 
     return config
+
+
+DEFAULT_CONFIG = load_config()
