@@ -23,7 +23,7 @@ __all__ = [
 ]
 
 
-def load_optimizer(name):
+def load_optimizer(name, cfg: dict = {}):
     """
     Factory function to instantiate a optimizer by name from the registry.
 
@@ -36,9 +36,14 @@ def load_optimizer(name):
         Ioptimizer: An instance of the selected optimizer implementation.
     """
     optimizer_cls = registry.get_optimizer_class(name)
-
-    model_path = Path(registry.get_path("model_dir") + "/sac+logos+ava1-l14-linearMSE.pth")
-    clip_model_path = Path(registry.get_path("model_dir") + "/clip/ViT-L-14.pt")
+    if cfg.get("aesthetic_model_path") is None or cfg.get("clip_model_path") is None:
+        model_path = Path(registry.get_path("model_dir") +
+                          "/sac+logos+ava1-l14-linearMSE.pth")
+        clip_model_path = Path(registry.get_path(
+            "model_dir") + "/clip/ViT-L-14.pt")
+    else:
+        model_path = Path(cfg.get("aesthetic_model_path"))
+        clip_model_path = Path(cfg.get("clip_model_path"))
 
     aesthetic_eval_torch = AestheticEvaluatorTorch(model_path, clip_model_path)
     image_processor_torch = ImageProcessorTorch()

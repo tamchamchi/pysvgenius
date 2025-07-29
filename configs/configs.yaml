@@ -50,6 +50,9 @@ ranker:
    
 optimizer:
   diffvg:
+    aesthetic_model_path: "models/sac+logos+ava1-l14-linearMSE.pth"
+    clip_model_path: "models/ViT-L-14.pt"
+    siglip_model_path: "google/siglip-so400m-patch14-384"
     args:
       iterations: 200
       jpeg_iter: 200
