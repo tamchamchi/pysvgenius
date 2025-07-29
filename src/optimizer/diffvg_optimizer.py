@@ -48,7 +48,8 @@ class DiffVGOptimizer(IOptimizer):
         self.image_processor_torch = image_processor_torch
         self.image_processor_torch_ref = image_processor_torch_ref
         self.siglip_model = siglip_model
-        self.device = device
+        self.device = torch.device(device) if isinstance(
+            device, str) else device
         self.seed = seed
 
     def _load_svg_and_prepare_params(
@@ -710,4 +711,3 @@ class DiffVGOptimizer(IOptimizer):
 
             # Return tuple indicating failure due to exception
             return None, None
-

@@ -58,7 +58,7 @@ class Registry:
 
     def register_ranker(cls, name):
         def wrap(ranker_cls):
-            from src.ranker import IRanker
+            from src.ranker.base import IRanker
             assert issubclass(ranker_cls, IRanker), (
                 "All ranker must inherit 'IRanker' class"
             )
@@ -75,7 +75,7 @@ class Registry:
 
     def register_optimizer(cls, name):
         def wrap(optimizer_cls):
-            from src.optimizer import IOptimizer
+            from src.optimizer.base import IOptimizer
             assert issubclass(optimizer_cls, IOptimizer), (
                 "All optimizer must inherit 'IOptimizer' class"
             )
