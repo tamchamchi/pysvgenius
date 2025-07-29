@@ -178,8 +178,9 @@ class AestheticRanker(IRanker):
                         clip_download_root = str(
                             Path(registry.get_path("model_dir")) / "clip")
                         print(f"✓ CLIP download root: {clip_download_root}")
-                    except:
-                        print("⚠ Could not get clip download root from registry")
+                    except Exception as e:
+                        print(
+                            f"⚠ Could not get clip download root from registry {e}")
 
                 clip_model, preprocessor = clip.load(
                     self.clip_model_path,

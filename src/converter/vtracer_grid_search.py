@@ -15,7 +15,7 @@ from .base import IConverter
 from src.common.registry import registry
 
 
-@registry.register_converter("vtracer-grib-search")
+@registry.register_converter("vtracer-grid-search")
 class VtracerGribSearch(IConverter):
     def __init__(self):
         super().__init__()

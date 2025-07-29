@@ -63,7 +63,7 @@ optimizer:
       lr_points: 0.3
       lr_color: 0.01
       grad_clip_norm: 1.0
-      similarity_mode: "siglip"
+      similarity_mode: ""
       device: "cuda"
       dtype: torch.float16
 

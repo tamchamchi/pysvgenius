@@ -7,20 +7,6 @@ from diff_jpeg import diff_jpeg_coding
 from torch import fft, nn
 from torchvision.transforms import InterpolationMode
 
-DEFAULT_IMAGE_SIZE = 384
-DEFAULT_FFT_CUTOFF = 0.5
-DEFAULT_CROP_PERCENT = 0.05
-FORWARD_CROP_PERCENT = 0.03
-FORWARD_JPEG_QUALITY_1 = 95
-FORWARD_MEDIAN_SIZE = 9
-FORWARD_FFT_CUTOFF = 0.5
-FORWARD_BILATERAL_D = 5
-FORWARD_BILATERAL_SIGMA_COLOR = 75
-FORWARD_BILATERAL_SIGMA_SPACE = 75
-FORWARD_JPEG_QUALITY_2 = 92
-TEST_JPEG_QUALITY = 85
-COMPARISON_ATOL = 1e-2
-
 
 class ImageProcessorTorch(nn.Module):
     """
@@ -29,6 +15,19 @@ class ImageProcessorTorch(nn.Module):
     Args:
         seed (int, optional): Random seed for reproducibility. Defaults to None.
     """
+    DEFAULT_IMAGE_SIZE = 384
+    DEFAULT_FFT_CUTOFF = 0.5
+    DEFAULT_CROP_PERCENT = 0.05
+    FORWARD_CROP_PERCENT = 0.03
+    FORWARD_JPEG_QUALITY_1 = 95
+    FORWARD_MEDIAN_SIZE = 9
+    FORWARD_FFT_CUTOFF = 0.5
+    FORWARD_BILATERAL_D = 5
+    FORWARD_BILATERAL_SIGMA_COLOR = 75
+    FORWARD_BILATERAL_SIGMA_SPACE = 75
+    FORWARD_JPEG_QUALITY_2 = 92
+    TEST_JPEG_QUALITY = 85
+    COMPARISON_ATOL = 1e-2
 
     def __init__(self, seed=None):
         super().__init__()
@@ -69,7 +68,7 @@ class ImageProcessorTorch(nn.Module):
         )
 
         # Scale cutoff to match current image resolution
-        cutoff_frequency = cutoff_frequency * h / DEFAULT_IMAGE_SIZE
+        cutoff_frequency = cutoff_frequency * h / self.DEFAULT_IMAGE_SIZE
         r = min(crow, ccol) * cutoff_frequency
         r_sq = r**2
 
@@ -219,7 +218,7 @@ class ImageProcessorTorch(nn.Module):
         assert h == w, "The images must be square"
 
         # Scale the kernel size d proportionally to the input size (relative to a default reference size)
-        d = int(np.ceil(d * h / DEFAULT_IMAGE_SIZE))
+        d = int(np.ceil(d * h / self.DEFAULT_IMAGE_SIZE))
 
         # Apply bilateral filter using Kornia
         return K.bilateral_blur(
@@ -301,33 +300,36 @@ class ImageProcessorTorch(nn.Module):
         # 1. Apply random crop and resize (differentiable)
         if not skip_random_crop_resize:
             x = self.apply_random_crop_resize(
-                x, crop_percent=FORWARD_CROP_PERCENT
+                x, crop_percent=self.FORWARD_CROP_PERCENT
             )
 
         # 2. Apply JPEG compression (1st pass - non-differentiable)
         if not skip_jpeg_compression:
-            x = self.apply_jpeg_compression(x, quality=FORWARD_JPEG_QUALITY_1)
+            x = self.apply_jpeg_compression(
+                x, quality=self.FORWARD_JPEG_QUALITY_1)
 
         # 3. Apply median filtering (partially differentiable)
         if not skip_median_filter:
-            x = self.apply_median_filter(x, size=FORWARD_MEDIAN_SIZE)
+            x = self.apply_median_filter(x, size=self.FORWARD_MEDIAN_SIZE)
 
         # 4. Apply FFT low-pass filter (differentiable)
         if not skip_fft_low_pass:
-            x = self.apply_fft_low_pass(x, cutoff_frequency=FORWARD_FFT_CUTOFF)
+            x = self.apply_fft_low_pass(
+                x, cutoff_frequency=self.FORWARD_FFT_CUTOFF)
 
         # 5. Apply bilateral filter (differentiable)
         if not skip_bilateral_filter:
             x = self.apply_bilateral_filter(
                 x,
-                d=FORWARD_BILATERAL_D,
-                sigma_color=FORWARD_BILATERAL_SIGMA_COLOR,
-                sigma_space=FORWARD_BILATERAL_SIGMA_SPACE,
+                d=self.FORWARD_BILATERAL_D,
+                sigma_color=self.FORWARD_BILATERAL_SIGMA_COLOR,
+                sigma_space=self.FORWARD_BILATERAL_SIGMA_SPACE,
             )
 
         # 6. Apply JPEG compression again (2nd pass - non-differentiable)
         if not skip_jpeg_compression:
-            x = self.apply_jpeg_compression(x, quality=FORWARD_JPEG_QUALITY_2)
+            x = self.apply_jpeg_compression(
+                x, quality=self.FORWARD_JPEG_QUALITY_2)
 
         return x
 

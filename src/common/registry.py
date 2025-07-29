@@ -73,7 +73,23 @@ class Registry:
             return ranker_cls
         return wrap
 
-    @classmethod
+    def register_optimizer(cls, name):
+        def wrap(optimizer_cls):
+            from src.optimizer import IOptimizer
+            assert issubclass(optimizer_cls, IOptimizer), (
+                "All optimizer must inherit 'IOptimizer' class"
+            )
+
+            if name in cls.mapping["optimizer"]:
+                raise KeyError(
+                    "Name '{}' already registered for {}.".format(
+                        name, cls.mapping["optimizer"][name]
+                    )
+                )
+            cls.mapping["optimizer"][name] = optimizer_cls
+            return optimizer_cls
+        return wrap
+
     def register_path(cls, name, path):
         r"""Register a path to registry with key 'name'
 
@@ -111,6 +127,7 @@ class Registry:
             current = current[part]
         current[path[-1]] = obj
 
+    # generator
     @classmethod
     def get_generator_class(cls, name):
         return cls.mapping["generator"].get(name, None)
@@ -119,6 +136,7 @@ class Registry:
     def list_generator(cls):
         return sorted(cls.mapping["generator"].keys())
 
+    # converter
     @classmethod
     def get_converter_class(cls, name):
         return cls.mapping["converter"].get(name, None)
@@ -127,6 +145,7 @@ class Registry:
     def list_converter(cls):
         return sorted(cls.mapping["converter"].keys())
 
+    # ranker
     @classmethod
     def get_ranker_class(cls, name):
         return cls.mapping["ranker"][name]
@@ -135,6 +154,16 @@ class Registry:
     def list_ranker(cls):
         return sorted(cls.mapping["ranker"].keys())
 
+    # optimizer
+    @classmethod
+    def get_optimizer_class(cls, name):
+        return cls.mapping["optimizer"][name]
+
+    @classmethod
+    def list_optimizer(cls):
+        return sorted(cls.mapping["optimizer"].keys())
+
+    # path
     @classmethod
     def get_path(cls, name):
         return cls.mapping["paths"].get(name, None)

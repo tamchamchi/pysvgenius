@@ -15,33 +15,41 @@ from torchvision import transforms
 from tqdm import trange
 from transformers import AutoModel
 
-from src._config import (
-    AESTHETIC_MODEL_PATH,
-    CLIP_MODEL_PATH,
-    DATA_DIR,
-    FORWARD_CROP_PERCENT,
-)
 from src.utils.logger import get_library_logger
 from src.utils.svg_utils import optimize_svg_size
+from src.common.registry import registry
 
 from .base import IOptimizer
-from .components.aesthetic import AestheticEvaluatorTorch
+from .components.aesthetic_evaluator_torch import AestheticEvaluatorTorch
 from .components.image_processor_torch import ImageProcessorTorch
 
 
+@registry.register_optimizer("diffvg")
 class DiffVGOptimizer(IOptimizer):
-    def __init__(self, logger: Optional[logging.Logger] = None, device=torch.device("cuda:0"), seed: int = 43):
+    FORWARD_CROP_PERCENT = 0.03
+
+    def __init__(
+        self,
+        aesthetic_evaluator_torch: Optional[AestheticEvaluatorTorch],
+        image_processor_torch: Optional[ImageProcessorTorch],
+        image_processor_torch_ref: Optional[ImageProcessorTorch],
+        siglip_model: Optional[AutoModel],
+        logger: Optional[logging.Logger] = None,
+        device=torch.device("cuda:0"),
+        seed: int = 43,
+    ):
         if logger is not None:
             self.logger = logger
         else:
             self.logger = get_library_logger(
                 f"{__name__}.{self.__class__.__name__}")
 
+        self.aesthetic_evaluator_torch = aesthetic_evaluator_torch
+        self.image_processor_torch = image_processor_torch
+        self.image_processor_torch_ref = image_processor_torch_ref
+        self.siglip_model = siglip_model
         self.device = device
         self.seed = seed
-
-    def _load_config(self, cfg):
-        pass
 
     def _load_svg_and_prepare_params(
         self, svg_path: Path
@@ -340,7 +348,7 @@ class DiffVGOptimizer(IOptimizer):
             tensor_image_batch = tensor_image.repeat(batch_size, 1, 1, 1)
             tensor_image_cropped_batch = (
                 self.image_processor_torch_ref.apply_random_crop_resize(
-                    tensor_image_batch, crop_percent=FORWARD_CROP_PERCENT)
+                    tensor_image_batch, crop_percent=self.FORWARD_CROP_PERCENT)
             )
 
             mse_loss = (
@@ -564,62 +572,12 @@ class DiffVGOptimizer(IOptimizer):
                                                                      torch.Tensor) else 0.0
         return self.shapes, self.shape_groups, final_aesthetic_score
 
-    def _load_aesthetic_evaluator(self) -> AestheticEvaluatorTorch:
-        self.logger.debug("Loading Aesthetic Evaluator ...")
-        try:
-            aesthetic_evaluator_torch = AestheticEvaluatorTorch(
-                model_path=AESTHETIC_MODEL_PATH, clip_model_path=CLIP_MODEL_PATH, device=torch.device("cuda:0"))
-            self.logger.success("AestheticEvaluatorTorch initialized.")
-            return aesthetic_evaluator_torch
-        except Exception as e:
-            self.logger.error(
-                f"Failed to initialize AestheticEvaluatorTorch: {e}")
-            raise
-
-    def _load_image_processor_torch(self) -> ImageProcessorTorch:
-        self.logger.debug("Loading Image Processor Torch ...")
-        try:
-            image_processor_torch = ImageProcessorTorch(
-                seed=self.seed).to(self.device)
-            self.logger.success(
-                f"ImageProcessorTorch initialized on device: {self.device}")
-            return image_processor_torch
-        except Exception as e:
-            self.logger.error(
-                f"Failed to initialize ImageProcessorTorch: {e}")
-            raise
-
-    def _load_siglip_model(self, model_path="google/siglip-so400m-patch14-384", device=torch.device("cuda:0"), dtype=torch.float16):
-        self.logger.debug(f"Loading SIGLIP model from {model_path}")
-        try:
-            model = AutoModel.from_pretrained(
-                model_path, torch_dtype=dtype).to(device)
-            model.eval()
-            self.logger.success(
-                f"SIGLIP model initialized on device: {device}")
-            return model
-        except Exception as e:
-            self.logger.error(
-                f"Failed to initialze SIGLIP model: {e}"
-            )
-            raise
-
-    def build(self, similarity_mode: str = "siglip"):
-        self.logger.debug("Starting DiffVG optimizer build process")
-        self.aesthetic_evaluator_torch = self._load_aesthetic_evaluator()
-
-        # Create two image processors: one for processing renderings, one for augmentations
-        self.image_processor_torch = self._load_image_processor_torch()
-        self.image_processor_torch_ref = self._load_image_processor_torch()
-
-        if similarity_mode == "siglip":
-            self.siglip_model = self._load_siglip_model()
-
     def _save_optimized_svg(self) -> str:
         """Save the optimized SVG to a results folder"""
         try:
             # Create results directory if it doesn't exist
-            results_dir = Path(DATA_DIR) / "results"
+            data_dir = registry.get_path("data_dir")
+            results_dir = Path(data_dir) / "results"
             results_dir.mkdir(parents=True, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

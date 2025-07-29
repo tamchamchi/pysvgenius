@@ -11,7 +11,7 @@ converter implementations.
 # Interface base class for all converters
 from .base import IConverter
 from .vtracer_binary_search import VtracerBinarySearch
-from .vtracer_grib_search import VtracerGribSearch
+from .vtracer_grid_search import VtracerGribSearch
 
 # Import the registry for managing converter registration and lookup
 from src.common.registry import registry

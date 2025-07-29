@@ -1,24 +1,9 @@
-from src import load_converter, load_generator, load_ranker, DEFAULT_CONFIG
-# generator = load_generator("sdxl-turbo")
+from src import load_converter, load_generator
 
+generator = load_generator("sdxl-turbo")
+converter = load_converter("vtracer-grid-search")
 
-from src import load_config
-options = ["generator.sdxl-turbo.num_images=6", "generator.sdxl-turbo.seed=42"]
-config = load_config(options=options)
-# print(config.to_dict())
-print(config.generator_cfg["sdxl-turbo"])
-generator = load_generator("sdxl-turbo", config.generator_cfg["sdxl-turbo"])
-converter = load_converter("vtracer-binary-search")
-images = generator("a lighthouse", num_images=5)
-svgs = converter(images, limit=20000)
-
-for i, svg in enumerate(svgs):
-    with open(f"{i}.svg", "w") as f:
-        f.write(svg)
-
-# aesthetic_ranker = load_ranker("aesthetic")
-siglip_ranker = load_ranker("siglip")
-
-ranked_svg = siglip_ranker(svgs, prompt = "a lighthouse")
-
-print(ranked_svg)
+# Example
+prompt = "flat color illustration, app icon, a baby dragon ,inspired by Tom Whalen, atmospheric light, soft color palette, bold outlines, golden hour lighting."
+images = generator(prompt, num_images=4)
+svgs = converter(images, limit=15000)
