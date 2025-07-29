@@ -8,16 +8,18 @@ from src.generator import load_generator
 from src.ranker import load_ranker
 from src.optimizer import load_optimizer
 
-# Get the absolute path of the project directory (go up one level from the current file)
-project_dir = Path(__file__).resolve().parents[1]
 
-# Define subdirectories relative to the project directory
-data_dir = project_dir / "data"
-model_dir = project_dir / "models"
-config_dir = project_dir / "configs"
 
 # Register paths in a central registry for easy access throughout the project
-def registry_path():
+def setup_path():
+    # Get the absolute path of the project directory (go up one level from the current file)
+    project_dir = Path(__file__).resolve().parents[1]
+
+    # Define subdirectories relative to the project directory
+    data_dir = project_dir / "data"
+    model_dir = project_dir / "models"
+    config_dir = project_dir / "configs"
+    
     registry.register_path("project_dir", str(project_dir))
     registry.register_path("data_dir", str(data_dir))
     registry.register_path("model_dir", str(model_dir))
@@ -125,6 +127,10 @@ def load_config(options=None):
         - registry.get_path(): For understanding path resolution
         - Component.from_config(): For using configs with components
     """
+    
+    if not registry.get_path("default_config_path"):
+        setup_path() 
+           
     args = Namespace(
         cfg_path=registry.get_path("default_config_path"),
         options=options if options is not None else [],
