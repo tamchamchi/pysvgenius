@@ -711,26 +711,3 @@ class DiffVGOptimizer(IOptimizer):
             # Return tuple indicating failure due to exception
             return None, None
 
-
-if __name__ == "__main__":
-    import logging
-
-    from src._config import OptimizationArgs
-    from src.utils import create_console_logger
-
-    args = OptimizationArgs
-    pydiffvg.set_device(torch.device("cuda:0"))
-
-    logger = create_console_logger("Optimizer", logging.INFO)
-
-    optimizer = DiffVGOptimizer(logger=logger)
-    optimizer.build(args.similarity_mode)
-
-    image = Image.open("/home/anhndt/pysvgenius/best_image.png")
-    with open("/home/anhndt/pysvgenius/best_original.svg", "r") as f:
-        svg = f.read()
-
-    results = optimizer.process(
-        svg, image, args=args, limit=10000)
-
-    print(len(results.encode()))

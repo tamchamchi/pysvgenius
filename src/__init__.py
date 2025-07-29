@@ -17,12 +17,12 @@ model_dir = project_dir / "models"
 config_dir = project_dir / "configs"
 
 # Register paths in a central registry for easy access throughout the project
-# registry.register_path("project_dir", str(project_dir))
-# registry.register_path("data_dir", str(data_dir))
-# registry.register_path("model_dir", str(model_dir))
-# registry.register_path("config_dir", str(config_dir))
-# registry.register_path("default_config_path", str(config_dir / "configs.yaml"))
-
+def registry_path():
+    registry.register_path("project_dir", str(project_dir))
+    registry.register_path("data_dir", str(data_dir))
+    registry.register_path("model_dir", str(model_dir))
+    registry.register_path("config_dir", str(config_dir))
+    registry.register_path("default_config_path", str(config_dir / "configs.yaml"))
 
 # Define publicly accessible functions or objects when this module is imported
 __all__ = ["load_generator", "load_converter",
@@ -135,4 +135,3 @@ def load_config(options=None):
     return config
 
 
-DEFAULT_CONFIG = load_config()
