@@ -17,7 +17,7 @@ model_dir = project_dir / "models"
 config_dir = project_dir / "configs"
 
 # Register paths in a central registry for easy access throughout the project
-registry.register_path("project_dir", str(project_dir))
+# registry.register_path("project_dir", str(project_dir))
 registry.register_path("data_dir", str(data_dir))
 registry.register_path("model_dir", str(model_dir))
 registry.register_path("config_dir", str(config_dir))
