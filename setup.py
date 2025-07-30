@@ -56,7 +56,7 @@ class CustomInstall(install):
             print("⚠ Warning: pydiffvg không import được. Kiểm tra log build.")
 setup(
     name="pysvgenius",
-    version="0.1.4",
+    version="0.1.5",
     author="Anh Nguyen",
     author_email="anhndt.work@gmail.com",
     description="A library for text_to_svg, image_to_svg, and SVG resizing and optimization.",
@@ -71,7 +71,7 @@ setup(
 
     packages=find_packages(),
     install_requires=parse_requirements("requirements.txt"),
-    extras_require={
+    extras_requires={
         "diffvg": [
             "git+https://github.com/BachiLi/diffvg.git"
         ],

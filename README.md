@@ -39,9 +39,9 @@ Easily generate scalable vector graphics (SVG) for design, AI, or web applicatio
 
 | Input | Text-to-Image | Image-to-SVG | Optimized SVG |
 |-------|---------------|--------------|---------------|
-| **"A lighthouse overlooking the ocean"** | <img src="./assets/lighthouse_image.png" width="150" alt="Generated Image"> | <img src="./assets/lighthouse_svg.svg" width="150" alt="SVG Conversion"> | <img src="./assets/lighthouse_optimized.svg" width="150" alt="Optimized SVG"> |
-| **"A serene Asian dragon"** | <img src="./assets/dragon_image.png" width="150" alt="Dragon Image"> | <img src="./assets/dragon_svg.svg" width="150" alt="Dragon SVG"> | <img src="./assets/dragon_optimized.svg" width="150" alt="Dragon Optimized"> |
-| **"Futuristic skyscraper with neon lights"** | <img src="./assets/skyscraper_image.png" width="150" alt="Skyscraper Image"> | <img src="./assets/skyscraper_svg.svg" width="150" alt="Skyscraper SVG"> | <img src="./assets/skyscraper_optimized.svg" width="150" alt="Skyscraper Optimized"> |
+| **"A lighthouse overlooking the ocean"** | <img src="https://raw.githubusercontent.com/tamchamchi/pysvgenius/main/assets/lighthouse_image.png" width="150" alt="Generated Image"> | <img src="https://raw.githubusercontent.com/tamchamchi/pysvgenius/main/assets/lighthouse_svg.svg" width="150" alt="SVG Conversion"> | <img src="https://raw.githubusercontent.com/tamchamchi/pysvgenius/main/assets/lighthouse_optimized.svg" width="150" alt="Optimized SVG"> |
+| **"A serene Asian dragon"** | <img src="https://raw.githubusercontent.com/tamchamchi/pysvgenius/main/assets/dragon_image.png" width="150" alt="Dragon Image"> | <img src="https://raw.githubusercontent.com/tamchamchi/pysvgenius/main/assets/dragon_svg.svg" width="150" alt="Dragon SVG"> | <img src="https://raw.githubusercontent.com/tamchamchi/pysvgenius/main/assets/dragon_optimized.svg" width="150" alt="Dragon Optimized"> |
+| **"Futuristic skyscraper with neon lights"** | <img src="https://raw.githubusercontent.com/tamchamchi/pysvgenius/main/assets/skyscraper_image.png" width="150" alt="Skyscraper Image"> | <img src="https://raw.githubusercontent.com/tamchamchi/pysvgenius/main/assets/skyscraper_svg.svg" width="150" alt="Skyscraper SVG"> | <img src="https://raw.githubusercontent.com/tamchamchi/pysvgenius/main/assets/skyscraper_optimized.svg" width="150" alt="Skyscraper Optimized"> |
 
 </div>
 
