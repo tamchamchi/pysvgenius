@@ -24,14 +24,15 @@ Turn your text or images into optimized, scalable SVGs effortlessly.
 
 ## 📖 Description
 
-**Pysvgenius** is a Python library that enables:
-- **Text to SVG** conversion
-- **Image to SVG** vectorization
-- **Smart SVG resizing** with optimization
+**Pysvgenius** is a powerful Python library designed for **generating and optimizing scalable vector graphics (SVGs)**. It provides an end‑to‑end workflow that includes:
+- **Text‑to‑SVG**: Generate SVG illustrations directly from text prompts.
 
-Easily generate scalable vector graphics (SVG) for design, AI, or web applications.
+- **Image‑to‑SVG**: Convert raster images into clean, scalable vector graphics.
 
----
+- **Smart SVG Optimization & Resizing**: Optimize paths and file size while preserving visual quality.
+
+With **Pysvgenius**, you can effortlessly create high‑quality SVGs for **design**, **AI applications**, and **modern web projects**, ensuring both **scalability** and **efficiency**.
+
 
 ## 🖼️ Demo
 
@@ -45,6 +46,19 @@ Easily generate scalable vector graphics (SVG) for design, AI, or web applicatio
 
 </div>
 
+## 🖥️ System Requirements
+
+To install and run **pysvgenius** smoothly, we recommend the following minimum setup:
+
+- **OS**: Linux / macOS / Windows 10+ (x86_64)
+- **Python**: 3.10 or higher  
+- **CPU**: 4 cores (Intel i5/Ryzen 5 or higher)  
+- **RAM**: 16 GB minimum (24 GB recommended for large models)  
+- **Storage**: ~30 GB for models & caches  
+- **GPU**: NVIDIA GPU with CUDA 11+ for faster generation and DiffVG optimization  
+  - Recommended: 16 GB VRAM or more  
+
+> ⚡ **Tip**: CPU-only mode works but is slower for image generation and optimization.
 ## 📦 Installation
 ```bash
 # Basic installation
@@ -206,5 +220,28 @@ pysvgenius/
 │   └── results/         # Output results
 ├── notebooks/            # Example notebooks
 ```
+## 📚 References & Acknowledgments
+
+This project builds upon the amazing work of the following projects and research:
+
+1. **VTracer** – Vector image tracer  
+   - [GitHub](https://github.com/visioncortex/vtracer)
+
+2. **CLIP** – Connecting vision and language  
+   - [OpenAI CLIP](https://github.com/openai/CLIP)
+
+3. **Improved Aesthetic Predictor**  
+   - [GitHub](https://github.com/christophschuhmann/improved-aesthetic-predictor)
+
+4. **DiffVG** – Differentiable Vector Graphics  
+   - Li, Tzu-Mao, et al. *"Differentiable Vector Graphics Rasterization for Editing and Learning."*  
+     [Paper](https://arxiv.org/abs/2005.13084) | [GitHub](https://github.com/BachiLi/diffvg)
+
+5. **Hugging Face Transformers** – Model hosting and inference  
+   - [Hugging Face](https://huggingface.co/)
+
+6. **Kaggle: Drawing with LLMs** – Discussion and inspiration  
+   - [Kaggle Discussion](https://www.kaggle.com/competitions/drawing-with-llms/discussion/581024)
+
 ## 🤝 Contributing
 Contributions are welcome! Please open an issue or submit a pull request.
