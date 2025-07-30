@@ -28,7 +28,7 @@ def setup_path():
 
 # Define publicly accessible functions or objects when this module is imported
 __all__ = ["load_generator", "load_converter",
-           "load_ranker", "load_optimizer", "load_config"]
+           "load_ranker", "load_optimizer", "load_config", "setup_path"]
 
 
 def load_config(options=None):

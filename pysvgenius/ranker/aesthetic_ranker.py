@@ -1,6 +1,6 @@
 import os
-import urllib.request
 from pathlib import Path
+from typing import Optional
 
 import clip
 import torch
@@ -51,10 +51,9 @@ class AestheticRanker(IRanker):
 
     def __init__(
         self,
-        model_path: str = None,
-        clip_model_path: str = None,
+        model_path: Optional[str] = None,
+        clip_model_path: Optional[str] = None,
         device: str = "cuda:0",
-        auto_download: bool = True
     ):
         """
         Initialize AestheticRanker.
@@ -63,9 +62,9 @@ class AestheticRanker(IRanker):
             model_path (str): Path to the trained aesthetic predictor model
             clip_model_path (str): CLIP model name (e.g., "ViT-L/14")
             device (str): Device to run the models on (cuda:0 or cpu)
-            auto_download (bool): Whether to auto-download missing models
         """
-        # Get model directory from registry with fallback
+        # Set default paths
+                # Get model directory from registry with fallback
         try:
             model_dir = Path(registry.get_path("model_dir"))
         except (KeyError, AttributeError):
@@ -82,60 +81,8 @@ class AestheticRanker(IRanker):
             model_dir / self.AESTHETIC_MODEL_NAME)
         self.clip_model_path = clip_model_path or "ViT-L/14"  # CLIP model name
         self.device = device
-        self.auto_download = auto_download
 
-        print(f"Aesthetic model path: {self.model_path}")
-        print(f"CLIP model: {self.clip_model_path}")
-
-        # Download aesthetic model if missing and auto_download is enabled
-        if not os.path.exists(self.model_path):
-            if self.auto_download:
-                print(f"⚠ Aesthetic model not found at {self.model_path}")
-                print("🔄 Starting download...")
-                self._download_aesthetic_model()
-            else:
-                print("✗ Aesthetic model not found and auto_download disabled")
-        else:
-            print(f"✓ Aesthetic model found at {self.model_path}")
-
-        # Load the aesthetic predictor and CLIP model
         self.predictor, self.clip_model, self.preprocessor = self._load()
-
-    def _download_aesthetic_model(self):
-        """Download the aesthetic predictor model if not found locally."""
-        print(f"📥 Downloading aesthetic model from {self.AESTHETIC_MODEL_URL}")
-
-        try:
-            # Create a progress callback for large downloads
-            def progress_callback(block_num, block_size, total_size):
-                downloaded = block_num * block_size
-                if total_size > 0:
-                    percent = min(100, (downloaded * 100) // total_size)
-                    mb_downloaded = downloaded // (1024*1024)
-                    mb_total = total_size // (1024*1024)
-                    print(
-                        f"\r📥 Downloading: {percent}% ({mb_downloaded}/{mb_total} MB)", end='')
-
-            # Download with progress
-            urllib.request.urlretrieve(
-                self.AESTHETIC_MODEL_URL,
-                self.model_path,
-                reporthook=progress_callback
-            )
-
-            # Verify download
-            if os.path.exists(self.model_path):
-                file_size = os.path.getsize(self.model_path) // (1024*1024)
-                print("\n✅ Aesthetic model downloaded successfully")
-                print(f"   File: {self.model_path}")
-                print(f"   Size: {file_size} MB")
-            else:
-                raise FileNotFoundError("Downloaded file not found")
-
-        except Exception as e:
-            print(f"\n✗ Failed to download aesthetic model: {e}")
-            raise RuntimeError(
-                f"Failed to download aesthetic model: {e}") from e
 
     def _load(self):
         """
@@ -146,57 +93,48 @@ class AestheticRanker(IRanker):
                 - predictor (nn.Module): Trained aesthetic predictor model
                 - clip_model (CLIPModel): Pretrained CLIP model
                 - preprocessor (Callable): Image preprocessor function
+
+        Raises:
+            FileNotFoundError: If the aesthetic model file is missing
+            RuntimeError: If loading models fails
         """
+        # 1. Ensure aesthetic model exists
+        if not os.path.exists(self.model_path):
+            error_msg = (
+                f"✗ Aesthetic model not found: {self.model_path}\n"
+                f"💡 Download it manually with:\n"
+                f"    wget {self.AESTHETIC_MODEL_URL} -O {self.model_path}"
+            )
+            raise FileNotFoundError(error_msg)
+
         try:
-            # Check if aesthetic model exists
-            if not os.path.exists(self.model_path):
-                if self.auto_download:
-                    print("🔄 Aesthetic model not found. Attempting download...")
-                    self._download_aesthetic_model()
-                else:
-                    error_msg = (
-                        f"✗ Aesthetic model not found: {self.model_path}\n"
-                        f"💡 Download it manually: wget {self.AESTHETIC_MODEL_URL} -O {self.model_path}"
-                    )
-                    print(error_msg)
-                    raise FileNotFoundError(error_msg)
-
-            # Load the trained aesthetic predictor state dictionary
+            # 2. Load the trained aesthetic predictor
             state_dict = torch.load(self.model_path, map_location=self.device)
-
-            # Initialize predictor with 768 dimensions (CLIP ViT-L/14 embedding size)
             predictor = AestheticPredictor(768)
             predictor.load_state_dict(state_dict)
             predictor.to(self.device)
-            predictor.eval()  # Set to evaluation mode
+            predictor.eval()
 
-            # Load CLIP model - this will auto-download if not cached
-            try:
-                clip_download_root = None
-                if hasattr(registry, 'get_path'):
-                    try:
-                        clip_download_root = str(
-                            Path(registry.get_path("model_dir")) / "clip")
-                        print(f"✓ CLIP download root: {clip_download_root}")
-                    except Exception as e:
-                        print(
-                            f"⚠ Could not get clip download root from registry {e}")
+            # 3. Load CLIP model
+            clip_download_root = None
+            if hasattr(registry, 'get_path'):
+                try:
+                    clip_download_root = str(Path(registry.get_path("model_dir")) / "clip")
+                    print(f"✓ CLIP download root: {clip_download_root}")
+                except Exception as e:
+                    print(f"⚠ Could not determine CLIP download root: {e}")
 
-                clip_model, preprocessor = clip.load(
-                    self.clip_model_path,
-                    device=self.device,
-                    download_root=clip_download_root
-                )
-
-            except Exception as clip_error:
-                print(f"✗ Failed to load CLIP model: {clip_error}")
-                raise
+            clip_model, preprocessor = clip.load(
+                self.clip_model_path,
+                device=self.device,
+                download_root=clip_download_root
+            )
 
             return predictor, clip_model, preprocessor
 
         except Exception as e:
-            print(f"✗ Failed to load models: {str(e)}")
-            raise RuntimeError(f"Failed to load models: {str(e)}") from e
+            raise RuntimeError(f"✗ Failed to load models: {e}") from e
+
 
     def score(self, images) -> list[float]:
         """

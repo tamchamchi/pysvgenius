@@ -274,7 +274,7 @@ class DiffVGOptimizer(IOptimizer):
         loss = torch.tensor(0.0, device=device, dtype=dtype)
 
         # Convert the target PIL image to tensor and move to device
-        image = self.image.resize((self.canvas_width, self.canvas_height))
+        image = self.image.resize((self.canvas_width, self.canvas_height)).convert("RGB")
         to_tensor = transforms.ToTensor()
         tensor_image = to_tensor(image)
         tensor_image = tensor_image.to(device)
