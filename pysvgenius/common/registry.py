@@ -20,7 +20,7 @@ class Registry:
             from src.common.registry import registry
         """
         def wrap(gen_cls):
-            from src.generator.base import IGenerator
+            from pysvgenius.generator.base import IGenerator
 
             assert issubclass(gen_cls, IGenerator), (
                 "All generators must inherit 'IGenerator' class"
@@ -39,7 +39,7 @@ class Registry:
 
     def register_converter(cls, name):
         def wrap(converter_cls):
-            from src.converter.base import IConverter
+            from pysvgenius.converter.base import IConverter
 
             assert issubclass(converter_cls, IConverter), (
                 "All converters must inherit 'IConverter' class"
@@ -58,7 +58,7 @@ class Registry:
 
     def register_ranker(cls, name):
         def wrap(ranker_cls):
-            from src.ranker.base import IRanker
+            from pysvgenius.ranker.base import IRanker
             assert issubclass(ranker_cls, IRanker), (
                 "All ranker must inherit 'IRanker' class"
             )
@@ -75,7 +75,7 @@ class Registry:
 
     def register_optimizer(cls, name):
         def wrap(optimizer_cls):
-            from src.optimizer.base import IOptimizer
+            from pysvgenius.optimizer.base import IOptimizer
             assert issubclass(optimizer_cls, IOptimizer), (
                 "All optimizer must inherit 'IOptimizer' class"
             )

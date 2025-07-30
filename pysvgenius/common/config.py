@@ -1,6 +1,6 @@
 from omegaconf import OmegaConf
 
-from src.common.registry import registry
+from pysvgenius.common.registry import registry
 
 
 class Config:

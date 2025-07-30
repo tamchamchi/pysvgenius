@@ -10,7 +10,7 @@ from transformers import (
     BitsAndBytesConfig,
     PaliGemmaForConditionalGeneration,
 )
-from src.utils.image_utils import process_svg_to_image
+from pysvgenius.utils.image_utils import process_svg_to_image
 
 
 class PaliGemmaRanker(ISVGRanker):

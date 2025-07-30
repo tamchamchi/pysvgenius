@@ -1,4 +1,4 @@
-from src.common.registry import registry
+from pysvgenius.common.registry import registry
 import os
 from iopath.common.file_io import g_pathmgr
 

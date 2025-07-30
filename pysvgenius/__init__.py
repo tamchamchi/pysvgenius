@@ -1,12 +1,12 @@
 from argparse import Namespace
 from pathlib import Path
 
-from src.common.config import Config
-from src.common.registry import registry
-from src.converter import load_converter
-from src.generator import load_generator
-from src.ranker import load_ranker
-from src.optimizer import load_optimizer
+from pysvgenius.common.config import Config
+from pysvgenius.common.registry import registry
+from pysvgenius.converter import load_converter
+from pysvgenius.generator import load_generator
+from pysvgenius.ranker import load_ranker
+from pysvgenius.optimizer import load_optimizer
 
 
 

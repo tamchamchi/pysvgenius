@@ -1,4 +1,4 @@
-from src import load_converter, load_generator, load_optimizer
+from pysvgenius import load_converter, load_generator, load_optimizer
 
 # generator = load_generator("sdxl-turbo")
 converter = load_converter("vtracer-grid-search")
