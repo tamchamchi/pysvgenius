@@ -1,18 +1,18 @@
 import re
 import xml.etree.ElementTree as ET
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 from io import BytesIO
 from itertools import product
 from typing import Tuple
-from functools import partial
-from concurrent.futures import ProcessPoolExecutor
 
 import vtracer
 from PIL import Image
 
-from src.utils import svg_to_png, compare_pil_images, optimize_svg_with_scour
+from ..utils import compare_pil_images, optimize_svg_with_scour, svg_to_png
 
+from ..common import registry
 from .base import IConverter
-from src.common.registry import registry
 
 
 @registry.register_converter("vtracer-grid-search")

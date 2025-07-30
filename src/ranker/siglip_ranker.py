@@ -3,9 +3,8 @@ import torch
 from PIL import Image
 from transformers import AutoModel, AutoProcessor
 
-from src.common import registry
-from src.utils.image_utils import prepare_image_for_ranking
-
+from ..common import registry
+from ..utils import prepare_image_for_ranking
 from .base import IRanker
 
 

@@ -6,14 +6,15 @@ This module provides SVG optimization capabilities using differentiable
 vector graphics rendering.
 """
 
-from .base import IOptimizer
-from .diffvg_optimizer import DiffVGOptimizer
-from .components.aesthetic_evaluator_torch import AestheticEvaluatorTorch
-from .components.image_processor_torch import ImageProcessorTorch
-from src.common.registry import registry
-from src.utils.logger import create_console_logger
 import logging
 from pathlib import Path
+
+from ..common import registry
+from ..utils.logger import create_console_logger
+from .base import IOptimizer
+from .components.aesthetic_evaluator_torch import AestheticEvaluatorTorch
+from .components.image_processor_torch import ImageProcessorTorch
+from .diffvg_optimizer import DiffVGOptimizer
 
 __all__ = [
     "IOptimizer",

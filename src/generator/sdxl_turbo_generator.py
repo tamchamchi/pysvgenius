@@ -1,12 +1,11 @@
-from typing import List
+from typing import List, Optional
 
 import torch
-from .base import IGenerator
 from diffusers import AutoPipelineForText2Image
 from PIL import Image
 
-from typing import Optional
-from src.common.registry import registry
+from ..common.registry import registry
+from .base import IGenerator
 
 
 @registry.register_generator("sdxl-turbo")

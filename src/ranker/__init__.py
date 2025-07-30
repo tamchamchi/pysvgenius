@@ -10,7 +10,7 @@ a factory pattern for easy instantiation of different ranker implementations.
 from .base import IRanker
 from .aesthetic_ranker import AestheticRanker
 from .siglip_ranker import SigLipRanker
-from src.common.registry import registry
+from ..common import registry
 
 __all__ = [
     "IRanker",

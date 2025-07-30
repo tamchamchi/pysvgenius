@@ -1,5 +1,5 @@
 from .base import IGenerator
-from src.common.registry import registry
+from ..common import registry
 
 
 @registry.register_generator("stable-diffusion-v2")

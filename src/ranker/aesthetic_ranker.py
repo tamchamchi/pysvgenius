@@ -1,14 +1,14 @@
 import os
 import urllib.request
 from pathlib import Path
+
 import clip
 import torch
 import torch.nn as nn
 from PIL import Image
 
-from src.common import registry
-from src.utils.image_utils import prepare_image_for_ranking
-
+from ..common import registry
+from ..utils import prepare_image_for_ranking
 from .base import IRanker
 
 

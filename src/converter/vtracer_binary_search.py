@@ -7,9 +7,8 @@ from functools import partial
 import vtracer
 from PIL import Image
 
+from ..common import registry
 from .base import IConverter
-
-from src.common.registry import registry
 
 
 @registry.register_converter("vtracer-binary-search")

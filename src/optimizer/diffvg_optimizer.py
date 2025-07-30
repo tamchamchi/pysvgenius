@@ -15,10 +15,8 @@ from torchvision import transforms
 from tqdm import trange
 from transformers import AutoModel
 
-from src.utils.logger import get_library_logger
-from src.utils.svg_utils import optimize_svg_size
-from src.common.registry import registry
-
+from ..common import registry
+from ..utils import get_library_logger, optimize_svg_size
 from .base import IOptimizer
 from .components.aesthetic_evaluator_torch import AestheticEvaluatorTorch
 from .components.image_processor_torch import ImageProcessorTorch
