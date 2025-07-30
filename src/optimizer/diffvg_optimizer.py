@@ -24,8 +24,6 @@ from .components.image_processor_torch import ImageProcessorTorch
 
 @registry.register_optimizer("diffvg")
 class DiffVGOptimizer(IOptimizer):
-    FORWARD_CROP_PERCENT = 0.03
-
     def __init__(
         self,
         aesthetic_evaluator_torch: Optional[AestheticEvaluatorTorch],
@@ -347,7 +345,7 @@ class DiffVGOptimizer(IOptimizer):
             tensor_image_batch = tensor_image.repeat(batch_size, 1, 1, 1)
             tensor_image_cropped_batch = (
                 self.image_processor_torch_ref.apply_random_crop_resize(
-                    tensor_image_batch, crop_percent=self.FORWARD_CROP_PERCENT)
+                    tensor_image_batch, crop_percent=0.03)  # FORWARD_CROP_PERCENT=0.03
             )
 
             mse_loss = (
