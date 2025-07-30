@@ -295,7 +295,7 @@ class AestheticRanker(IRanker):
         # Return top k indices and all scores
         result_indices = sorted_indices[:top_k]
 
-        return result_indices, all_scores
+        return result_indices
 
     @classmethod
     def from_config(cls, cfg):

@@ -56,16 +56,30 @@ class CustomInstall(install):
             print("⚠ Warning: pydiffvg không import được. Kiểm tra log build.")
 setup(
     name="pysvgenius",
-    version="0.1.3",
+    version="0.1.4",
     author="Anh Nguyen",
+    author_email="anhndt.work@gmail.com",
+    description="A library for text_to_svg, image_to_svg, and SVG resizing and optimization.",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
+
+    url="https://github.com/tamchamchi/pysvgenius",
+    project_urls={
+        "Bug Tracker": "https://github.com/tamchamchi/pysvgenius/issues",
+        "Documentation": "https://github.com/tamchamchi/pysvgenius#readme"
+    },
+
     packages=find_packages(),
     install_requires=parse_requirements("requirements.txt"),
     extras_require={
+        "diffvg": [
+            "git+https://github.com/BachiLi/diffvg.git"
+        ],
         "clip": [
-            # "clip @ git+https://github.com/openai/CLIP.git@dcba3cb2e2827b402d2701e7e1c7d9fed8a20ef1"
+           "git+https://github.com/openai/CLIP.git@dcba3cb2e2827b402d2701e7e1c7d9fed8a20ef1"
         ],
         "diff_jpeg": [
-            # "diff_jpeg @ git+https://github.com/necla-ml/Diff-JPEG@e81f082896ba145e35cc129bc7743244e10881e5"
+            "git+https://github.com/necla-ml/Diff-JPEG@e81f082896ba145e35cc129bc7743244e10881e5"
         ]
     },
     python_requires=">=3.10",
@@ -75,5 +89,5 @@ setup(
     },
     cmdclass={
         'install': CustomInstall,
-    }
+    },
 )
