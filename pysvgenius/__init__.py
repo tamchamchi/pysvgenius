@@ -3,11 +3,6 @@ from pathlib import Path
 
 from pysvgenius.common.config import Config
 from pysvgenius.common.registry import registry
-from pysvgenius.converter import load_converter
-from pysvgenius.generator import load_generator
-from pysvgenius.ranker import load_ranker
-from pysvgenius.optimizer import load_optimizer
-
 
 
 # Register paths in a central registry for easy access throughout the project
@@ -27,8 +22,7 @@ def setup_path():
     registry.register_path("default_config_path", str(config_dir / "configs.yaml"))
 
 # Define publicly accessible functions or objects when this module is imported
-__all__ = ["load_generator", "load_converter",
-           "load_ranker", "load_optimizer", "load_config", "setup_path"]
+__all__ = ["load_config", "setup_path"]
 
 
 def load_config(options=None):

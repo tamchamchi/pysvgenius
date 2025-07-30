@@ -9,10 +9,6 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import clip
-import torch
-import torch.nn as nn
-from PIL import Image
 
 from pysvgenius.common import registry
 

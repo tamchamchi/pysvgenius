@@ -28,8 +28,8 @@ class SDXLTurboGenerator(IGenerator):
         model_path: str = "stabilityai/sdxl-turbo",
         device: str = "cuda",
         seed: int = 42,
-        prefix: str = "",
-        suffix: str = "",
+        prefix: str = "flat color illustration, app icon,",
+        suffix: str = ",inspired by Tom Whalen, atmospheric light, soft color palette, bold outlines, golden hour lighting.",
         lora_path: Optional[str] = None,
     ):
         """

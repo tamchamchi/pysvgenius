@@ -5,8 +5,11 @@ Optimizer module for SVG optimization using DiffVG.
 This module provides SVG optimization capabilities using differentiable
 vector graphics rendering.
 """
-
+import importlib.util
 import logging
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from ..common import registry
@@ -22,7 +25,26 @@ __all__ = [
     "AestheticEvaluatorTorch",
     "ImageProcessorTorch"
 ]
+# Check if pydiffvg is installed
+if importlib.util.find_spec("pydiffvg") is None:
+    print("⚠ pydiffvg is not installed. Attempting to build from source...")
+    base_dir = os.path.dirname(__file__)
+    diffvg_dir = os.path.join(base_dir, "diffvg")
 
+    # Clone the diffvg repository if not present
+    if not os.path.exists(diffvg_dir):
+        print("Cloning diffvg repository...")
+        subprocess.check_call(["git", "clone", "https://github.com/BachiLi/diffvg.git", diffvg_dir])
+        print("Initializing and updating git submodules...")
+        subprocess.check_call(["git", "submodule", "update", "--init", "--recursive"], cwd=diffvg_dir)
+    else:
+        print(f"Found existing diffvg at {diffvg_dir}, skipping clone.")
+
+    # Build and install pydiffvg into the current environment
+    print("Building and installing pydiffvg...")
+    subprocess.check_call([sys.executable, "setup.py", "install"], cwd=diffvg_dir)
+
+    print("✅ pydiffvg installation attempt completed. Try importing again.")
 
 def load_optimizer(name, cfg: dict = {}):
     """
