@@ -176,7 +176,7 @@ class SigLipRanker(IRanker):
         # Success message when completed
         print(f"✓ SigLIP ranking complete - Processed {len(svgs)} SVGs")
 
-        return sorted_indices[:top_k]
+        return sorted_indices[:top_k], all_scores
 
     @classmethod
     def from_config(cls, cfg):

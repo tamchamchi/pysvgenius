@@ -65,26 +65,31 @@ To install and run **pysvgenius** smoothly, we recommend the following minimum s
 pip install pysvgenius
 
 # With OpenAI CLIP support
-pip install pysvgenius[clip]
-
-# Full installation with all extras
-pip install pysvgenius[clip,diff_jpeg]
+pip install git+https://github.com/openai/CLIP.git
 ```
-### 🔧 (Optional) Build DiffVG for Optimizer
+### 🔧 (Optional) Build DiffVG and Diff-JPEG for Optimizer
 
 
 To use advanced **SVG optimization** features, you need to build [diffvg](https://github.com/BachiLi/diffvg) from source.
 
 ```bash
-# 1. Clone diffvg repository
+# 1. DiffVG (SVG optimizer)
 git clone https://github.com/BachiLi/diffvg.git
 cd diffvg
 
-# 2. Initialize submodules
 git submodule update --init --recursive
 
-# 3. Install into current Python environment
+pip install svgwrite
+pip install svgpathtools
+pip install cssutils
+pip install numba
+pip install torch-tools
+pip install visdom
+
 python setup.py install
+
+# 2. Diff-JPEG (Differentiable JPEG compression)
+pip install git+https://github.com/necla-ml/Diff-JPEG
 ```
 ## 🚀 Usage
 
@@ -153,11 +158,11 @@ aesthetic_ranker = load_ranker("aesthetic")
 siglip_ranker = load_ranker("siglip")
 
 # Rank purely by visual aesthetics (top 5 SVGs)
-aesthetic_results = aesthetic_ranker(svgs=svgs, top_k=5)
+aesthetic_results, score = aesthetic_ranker(svgs=svgs, top_k=5)
 
 # Rank by semantic similarity to a text prompt (top 1 SVG)
 prompt = "a serene Asian dragon flying over green mountains"
-siglip_results = siglip_ranker(svgs=svgs, prompt=prompt, top_k=1)
+siglip_results, score = siglip_ranker(svgs=svgs, prompt=prompt, top_k=1)
 
 print("Aesthetic Ranking:", aesthetic_results)
 print("SigLIP Ranking:", siglip_results)
