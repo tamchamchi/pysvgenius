@@ -127,7 +127,7 @@ class AestheticRanker(IRanker):
             clip_model, preprocessor = clip.load(
                 self.clip_model_path,
                 device=self.device,
-                download_root=clip_download_root
+                download_root=clip_download_root if self.clip_model_path != "ViT-L/14" else None
             )
 
             return predictor, clip_model, preprocessor

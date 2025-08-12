@@ -12,6 +12,7 @@ converter implementations.
 from .base import IConverter
 from .vtracer_binary_search import VtracerBinarySearch
 from .vtracer_grid_search import VtracerGribSearch
+from .contour_based_vectorization import ContourBasedConvertor
 
 # Import the registry for managing converter registration and lookup
 from ..common import registry
@@ -20,7 +21,8 @@ from ..common import registry
 __all__ = [
     "IConverter",
     "VtracerBinarySearch",
-    "VtracerGribSearch"
+    "VtracerGribSearch",
+    "ContourBasedConvertor"
 ]
 
 

@@ -5,9 +5,10 @@ def parse_requirements(filename):
     with open(filename) as f:
         return [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
+
 setup(
     name="pysvgenius",
-    version="0.1.5.3",
+    version="0.1.6",
     author="Anh Nguyen",
     author_email="anhndt.work@gmail.com",
     description="A library for text_to_svg, image_to_svg, and SVG resizing and optimization.",
@@ -33,6 +34,9 @@ setup(
             # "diff_jpeg@git+https://github.com/necla-ml/Diff-JPEG"
         ]
     },
+    package_data={
+        "pysvgenius": ["configs/*.ymal"]
+    },
     python_requires=">=3.10",
     include_package_data=True,
     license="MIT",
@@ -44,4 +48,3 @@ setup(
         "Programming Language :: Python :: 3.11",
     ],
 )
-
