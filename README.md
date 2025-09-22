@@ -147,7 +147,7 @@ from pysvgenius import setup_path
 from pysvgenius.ranker import load_ranker
 from pysvgenius.common import registry
 
-# ✅ Setup paths (run ONCE at the start of your script)
+# Setup paths (run ONCE at the start of your script)
 setup_path()
 
 # Check available rankers
