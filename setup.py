@@ -9,8 +9,8 @@ def parse_requirements(filename):
 setup(
     name="pysvgenius",
     version="0.1.6",
-    author="Anh Nguyen, Khai Nguyen",
-    author_email="anhndt.work@gmail.com, nguyenquangk981@gmail.com",
+    author="Anh Nguyen",
+    author_email="anhndt.work@gmail.com",
     description="A library for text_to_svg, image_to_svg, and SVG resizing and optimization.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
